@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>SFPM — Fleet Status</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#121110; --panel:#1c1a17; --panel-alt:#242019;
+    --steel:#3a362e; --steel-lt:#514b3e;
+    --amber:#c98a3b; --amber-bright:#e0a855;
+    --rust:#a63a2e; --rust-bright:#c4523f;
+    --olive:#5c6b47; --olive-bright:#7c8f5f;
+    --slate:#4a5a63; --slate-bright:#6b8290;
+    --text:#ede7d9; --text-muted:#9c9483; --text-dim:#655f52;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:radial-gradient(ellipse at top, rgba(201,138,59,0.06), transparent 60%), var(--bg);
+    color:var(--text);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh;
+  }
+  .wrap{max-width:900px;margin:0 auto;padding:24px 16px 80px;}
+  .hdr{padding:8px 4px 20px;border-bottom:1px solid var(--steel);margin-bottom:22px;position:relative;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:10px;}
+  .hdr::after{content:"";position:absolute;bottom:-1px;left:0;width:64px;height:3px;background:var(--amber);}
+  .eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.18em;color:var(--amber);text-transform:uppercase;margin-bottom:6px;}
+  h1{font-family:'Oswald',sans-serif;font-weight:700;font-size:26px;letter-spacing:.02em;text-transform:uppercase;margin:0;}
+  .refresh{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-muted);cursor:pointer;border:1px solid var(--steel);border-radius:4px;padding:7px 12px;background:var(--panel);}
+  .refresh:active{border-color:var(--amber);}
+  .stamp{font-size:11px;color:var(--text-dim);margin-top:4px;}
+
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:22px;}
+  .stat{background:var(--panel);border:1px solid var(--steel);border-radius:4px;padding:12px 8px;text-align:center;}
+  .stat .n{font-family:'Oswald',sans-serif;font-size:24px;font-weight:600;line-height:1;}
+  .stat.overdue .n{color:var(--rust-bright);}
+  .stat.due_soon .n{color:var(--amber-bright);}
+  .stat.ok .n{color:var(--olive-bright);}
+  .stat.no_data .n{color:var(--text-dim);}
+  .stat .l{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);margin-top:5px;}
+
+  .loading{text-align:center;padding:60px 0;color:var(--text-muted);font-family:'JetBrains Mono',monospace;font-size:13px;}
+
+  .card{
+    background:linear-gradient(180deg, var(--panel-alt), var(--panel));border:1px solid var(--steel);
+    border-left:3px solid var(--steel-lt);border-radius:6px;padding:14px 16px;margin-bottom:10px;
+  }
+  .card.overdue{border-left-color:var(--rust);}
+  .card.due_soon{border-left-color:var(--amber);}
+  .card.ok{border-left-color:var(--olive);}
+  .card.no_data{border-left-color:var(--text-dim);}
+  .card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;cursor:pointer;}
+  .card-name{font-family:'Oswald',sans-serif;font-size:17px;font-weight:600;text-transform:uppercase;}
+  .card-sub{font-size:12px;color:var(--text-muted);margin-top:2px;}
+  .card-badge{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:4px 9px;border-radius:3px;font-weight:700;white-space:nowrap;}
+  .card-badge.overdue{background:rgba(166,58,46,.2);color:var(--rust-bright);border:1px solid rgba(166,58,46,.5);}
+  .card-badge.due_soon{background:rgba(201,138,59,.18);color:var(--amber-bright);border:1px solid rgba(201,138,59,.5);}
+  .card-badge.ok{background:rgba(124,143,95,.12);color:var(--olive-bright);border:1px solid rgba(124,143,95,.3);}
+  .card-badge.no_data{background:rgba(156,148,131,.12);color:var(--text-dim);border:1px solid rgba(156,148,131,.3);}
+  .card-mileage{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);margin-top:6px;}
+
+  .detail{display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--steel);}
+  .detail.open{display:block;}
+  .ditem{display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;border-bottom:1px solid rgba(58,54,46,.5);}
+  .ditem:last-child{border-bottom:none;}
+  .ditem .s{font-family:'JetBrains Mono',monospace;font-size:10.5px;text-transform:uppercase;}
+  .ditem .s.overdue{color:var(--rust-bright);}
+  .ditem .s.due_soon{color:var(--amber-bright);}
+  .ditem .s.ok{color:var(--olive-bright);}
+  .ditem .s.no_baseline{color:var(--text-dim);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <div>
+      <div class="eyebrow">Service First Property Management</div>
+      <h1>Fleet Status</h1>
+      <div class="stamp" id="stamp"></div>
+    </div>
+    <button class="refresh" id="refreshBtn">↻ Refresh</button>
+  </div>
+
+  <div class="stats" id="statsBox"></div>
+  <div id="content"><div class="loading">Loading fleet status…</div></div>
+</div>
+
+<script>
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzLmlH_8rtsZNLOj2rnAWqRqfFmY9HbUgwquHuLNpoaJ7kh8hAQPnRpxk_0NshrbWEQ/exec";
+
+const STATUS_LABEL = { overdue: 'Overdue', due_soon: 'Due Soon', ok: 'OK', no_data: 'No Mileage Yet', no_baseline: 'No Baseline' };
+
+async function load(){
+  document.getElementById('content').innerHTML = '<div class="loading">Loading fleet status…</div>';
+  try{
+    const res = await fetch(APPS_SCRIPT_URL + '?mode=admin');
+    const data = await res.json();
+    render(data.fleet);
+    document.getElementById('stamp').textContent = 'Updated ' + new Date().toLocaleString();
+  }catch(e){
+    document.getElementById('content').innerHTML = '<div class="loading">Couldn\\'t load fleet status. Check your connection and refresh.</div>';
+  }
+}
+
+function render(fleet){
+  const counts = { overdue: 0, due_soon: 0, ok: 0, no_data: 0 };
+  fleet.forEach(f => { counts[f.worst === 'no_baseline' ? 'no_data' : f.worst]++; });
+
+  document.getElementById('statsBox').innerHTML = `
+    <div class="stat overdue"><div class="n">${counts.overdue}</div><div class="l">Overdue</div></div>
+    <div class="stat due_soon"><div class="n">${counts.due_soon}</div><div class="l">Due Soon</div></div>
+    <div class="stat ok"><div class="n">${counts.ok}</div><div class="l">OK</div></div>
+    <div class="stat no_data"><div class="n">${counts.no_data}</div><div class="l">No Data Yet</div></div>
+  `;
+
+  document.getElementById('content').innerHTML = fleet.map((f, idx) => {
+    const worst = f.worst === 'no_baseline' ? 'no_data' : f.worst;
+    const flaggedItems = f.items.filter(i => i.status === 'overdue' || i.status === 'due_soon');
+    return `
+      <div class="card ${worst}">
+        <div class="card-top" onclick="toggle(${idx})">
+          <div>
+            <div class="card-name">${esc(f.unit)}${f.assigned ? ' — ' + esc(f.assigned) : ''}</div>
+            <div class="card-sub">${esc(f.entity || '')} ${esc(f.yearMakeModel || '')}</div>
+            ${f.latestMileage ? `<div class="card-mileage">${Number(f.latestMileage).toLocaleString()} mi as of ${new Date(f.latestDate).toLocaleDateString()}</div>` : `<div class="card-mileage">No mileage logged yet</div>`}
+          </div>
+          <span class="card-badge ${worst}">${STATUS_LABEL[worst]}${f.overdueCount ? ' (' + f.overdueCount + ')' : ''}</span>
+        </div>
+        <div class="detail" id="detail-${idx}">
+          ${f.items.map(i => `
+            <div class="ditem">
+              <span>${esc(i.item)}</span>
+              <span class="s ${i.status}">${i.status === 'overdue' ? 'Overdue ' + Math.abs(i.remaining).toLocaleString() + ' mi' : i.status === 'due_soon' ? 'Due in ' + i.remaining.toLocaleString() + ' mi' : i.status === 'ok' ? i.remaining.toLocaleString() + ' mi left' : STATUS_LABEL[i.status]}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggle(idx){
+  document.getElementById('detail-' + idx).classList.toggle('open');
+}
+
+function esc(s){
+  const d = document.createElement('div');
+  d.textContent = s || '';
+  return d.innerHTML;
+}
+
+document.getElementById('refreshBtn').addEventListener('click', load);
+load();
+</script>
+</body>
+</html>
