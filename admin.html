@@ -115,18 +115,24 @@ function render(fleet){
 
   document.getElementById('content').innerHTML = fleet.map((f, idx) => {
     const worst = f.worst === 'no_baseline' ? 'no_data' : f.worst;
-    const flaggedItems = f.items.filter(i => i.status === 'overdue' || i.status === 'due_soon');
     return `
       <div class="card ${worst}">
         <div class="card-top" onclick="toggle(${idx})">
           <div>
             <div class="card-name">${esc(f.unit)}${f.assigned ? ' — ' + esc(f.assigned) : ''}</div>
-            <div class="card-sub">${esc(f.entity || '')} ${esc(f.yearMakeModel || '')}</div>
+            <div class="card-sub">${esc(f.entity || '')} ${esc(f.yearMakeModel || '')}${f.plate ? ' · ' + esc(f.plate) : ''}</div>
             ${f.latestMileage ? `<div class="card-mileage">${Number(f.latestMileage).toLocaleString()} mi as of ${new Date(f.latestDate).toLocaleDateString()}</div>` : `<div class="card-mileage">No mileage logged yet</div>`}
           </div>
           <span class="card-badge ${worst}">${STATUS_LABEL[worst]}${f.overdueCount ? ' (' + f.overdueCount + ')' : ''}</span>
         </div>
         <div class="detail" id="detail-${idx}">
+          ${f.vin ? `<div class="ditem"><span>VIN</span><span class="s">${esc(f.vin)}</span></div>` : ''}
+          ${f.docItems.map(i => `
+            <div class="ditem">
+              <span>${esc(i.item)}</span>
+              <span class="s ${i.status}">${i.status === 'overdue' ? 'Overdue (' + esc(i.dateValue) + ')' : i.status === 'due_soon' ? 'Due Soon (' + esc(i.dateValue) + ')' : i.status === 'ok' ? esc(i.dateValue) : 'No Date On File'}</span>
+            </div>
+          `).join('')}
           ${f.items.map(i => `
             <div class="ditem">
               <span>${esc(i.item)}</span>
