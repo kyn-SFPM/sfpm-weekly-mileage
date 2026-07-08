@@ -48,11 +48,15 @@ function doPost(e) {
     const intervals = getIntervals_();
     const baseline = getBaselineForUnit_(unit);
     const results = [];
+    const newlySet = [];
 
     intervals.forEach(function (item) {
       const lastAt = baseline[item.name];
       if (lastAt === null || lastAt === undefined || lastAt === '') {
-        results.push({ item: item.name, status: 'unknown', message: item.name + ': no baseline on file yet' });
+        // No baseline yet -- this reading becomes the starting point.
+        setBaselineCell_(unit, item.name, mileage);
+        newlySet.push(item.name);
+        results.push({ item: item.name, status: 'ok', remaining: item.miles, message: item.name + ' -- baseline set today, next check in ' + item.miles.toLocaleString() + ' mi' });
         return;
       }
       const since = mileage - Number(lastAt);
@@ -66,7 +70,7 @@ function doPost(e) {
       }
     });
 
-    return jsonOut_({ ok: true, unit: unit, mileage: mileage, results: results });
+    return jsonOut_({ ok: true, unit: unit, mileage: mileage, results: results, baselinesJustSet: newlySet });
   } catch (err) {
     return jsonOut_({ ok: false, error: String(err) });
   }
@@ -104,6 +108,28 @@ function getBaselineForUnit_(unit) {
     out[h] = row[i];
   });
   return out;
+}
+
+function setBaselineCell_(unit, itemName, mileage) {
+  const sheet = SpreadsheetApp.openById(BASELINE_SHEET_ID).getSheets()[0];
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const colIndex = headers.indexOf(itemName);
+  if (colIndex === -1) return;
+
+  let rowIndex = -1;
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === unit) { rowIndex = i; break; }
+  }
+  if (rowIndex === -1) {
+    // Unit isn't on the baseline sheet yet -- add it.
+    const newRow = new Array(headers.length).fill('');
+    newRow[0] = unit;
+    newRow[colIndex] = mileage;
+    sheet.appendRow(newRow);
+    return;
+  }
+  sheet.getRange(rowIndex + 1, colIndex + 1).setValue(mileage);
 }
 
 function jsonOut_(obj) {
