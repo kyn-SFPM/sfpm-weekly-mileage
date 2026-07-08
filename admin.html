@@ -98,7 +98,7 @@ async function load(){
     render(data.fleet);
     document.getElementById('stamp').textContent = 'Updated ' + new Date().toLocaleString();
   }catch(e){
-    document.getElementById('content').innerHTML = '<div class="loading">Couldn\\'t load fleet status. Check your connection and refresh.</div>';
+    document.getElementById('content').innerHTML = `<div class="loading">Could not load fleet status. Check your connection and refresh.</div>`;
   }
 }
 
