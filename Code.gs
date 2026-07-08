@@ -16,10 +16,60 @@
 
 const ROSTER_SHEET_ID = '1DNDODv5taegzsA7fzowtiYcHrLWzrSXemklV3I_zlac';
 const INTERVALS_SHEET_ID = '1sKpBWxmQcUujuZJrvS9T10NEb-0XrhQTaVaWone75Kw';
-const BASELINE_SHEET_ID = '1JpffVRqJpO0StT-7QhBpoYLPvKYmEN0BOC9uA9m3Bjw';
+const BASELINE_SHEET_ID = '1_MVvcxxn2WIPRMwFcFl6_BguYUM9b25ioX_E8K8zW2U';
 const LOG_SHEET_ID = '1MGgd9U_ciUi5HpuVti7uOqOCGioNefsvH1eNuEdl6YI';
 const RECEIPTS_FOLDER_ID = '1D3ABMoGUb3f6IknmDJapfZ5XvDxxKw-l';
 const RECEIPTS_LOG_SHEET_ID = '1Vf3hi4ao7EkcfZ201-Dvw4cHqBB4QcW3Yq2zevBNG0I';
+
+// Earliest/latest known odometer readings per unit, pulled from the historical
+// odometer export. Used to estimate mileage on a given date when backfilling
+// a known service date without knowing the exact mileage at the time.
+// Unit 15 excluded -- its history shows mileage dropping over time, which
+// means the vehicle assigned to that slot was swapped, so linear estimation
+// would be wrong.
+const MILEAGE_ANCHORS = {
+  'Unit 1': [['2019-05-17', 119681], ['2025-12-12', 216671]],
+  'Unit 2': [['2019-05-17', 62406], ['2025-12-12', 72577]],
+  'Unit 3': [['2019-05-17', 63217], ['2025-12-12', 65567]],
+  'Unit 4': [['2019-05-17', 113647], ['2025-12-12', 272962]],
+  'Unit 5': [['2019-05-17', 52062], ['2025-12-12', 114055]],
+  'Unit 6': [['2019-05-17', 233262], ['2025-12-12', 298834]],
+  'Unit 8': [['2019-05-17', 86264], ['2025-12-12', 230586]],
+  'Unit 9': [['2019-05-17', 91000], ['2025-12-12', 147591]],
+  'Unit 10': [['2019-05-17', 211285], ['2025-12-12', 296158]],
+  'Unit 11': [['2019-05-17', 120519], ['2025-12-12', 182048]],
+  'Unit 12': [['2019-05-17', 87306], ['2025-12-12', 179263]],
+  'Unit 13': [['2019-05-17', 240556], ['2025-12-12', 273208]],
+  'Unit 14': [['2019-05-17', 106813], ['2025-12-12', 147431]],
+  'Unit 16': [['2019-05-17', 132270], ['2025-12-12', 191806]],
+  'Unit 19': [['2019-08-09', 124728], ['2025-12-12', 165760]],
+  'Unit 20': [['2019-08-09', 131869], ['2025-12-12', 257954]],
+  'Unit 21': [['2020-07-31', 66957], ['2025-12-12', 129873]],
+  'Unit 22': [['2020-07-31', 85327], ['2025-12-12', 149478]],
+  'Unit 23': [['2022-03-21', 1269], ['2025-12-12', 86702]],
+  'Unit 24': [['2022-03-21', 2784], ['2025-12-12', 124265]],
+  'Unit 25': [['2022-12-05', 14], ['2025-12-12', 59773]],
+  'Unit 26': [['2023-03-10', 1989], ['2025-12-12', 47978]],
+  'Unit 27': [['2023-03-17', 960], ['2025-12-12', 61835]],
+  'Unit 28': [['2024-05-13', 1048], ['2025-12-12', 43003]],
+  'Unit 29': [['2024-06-28', 17041], ['2025-12-12', 56165]],
+  'Unit 30': [['2025-05-16', 907], ['2025-12-12', 5625]],
+  'Unit 31': [['2025-05-16', 942], ['2025-12-12', 7644]]
+};
+
+function estimateMileageAtDate_(unit, dateStr) {
+  const anchors = MILEAGE_ANCHORS[unit];
+  if (!anchors || !dateStr) return null;
+  const target = new Date(dateStr + 'T00:00:00').getTime();
+  const d0 = new Date(anchors[0][0] + 'T00:00:00').getTime();
+  const m0 = anchors[0][1];
+  const d1 = new Date(anchors[1][0] + 'T00:00:00').getTime();
+  const m1 = anchors[1][1];
+  if (d1 === d0) return m0;
+  const frac = (target - d0) / (d1 - d0);
+  const estimate = m0 + frac * (m1 - m0);
+  return Math.max(0, Math.round(estimate));
+}
 
 const DUE_SOON_BUFFER = 500; // flag as "due soon" within this many miles of the interval
 
@@ -151,18 +201,28 @@ function handleBackfillService_(e) {
   try {
     const unit = (e.parameter.unit || '').trim();
     const itemName = (e.parameter.serviceItem || '').trim();
-    const mileage = Number(e.parameter.mileage);
     const dateStr = (e.parameter.date || '').trim(); // date the service was actually done, for your own records
+    let mileage = Number(e.parameter.mileage);
+    let estimated = false;
+
+    if (!mileage && dateStr) {
+      const est = estimateMileageAtDate_(unit, dateStr);
+      if (est !== null) {
+        mileage = est;
+        estimated = true;
+      }
+    }
+
     if (!unit || !itemName || !mileage) {
-      return jsonOut_({ ok: false, error: 'Missing unit, service item, or mileage.' });
+      return jsonOut_({ ok: false, error: 'Missing unit, service item, or mileage -- and no date given to estimate from.' });
     }
     setBaselineCell_(unit, itemName, mileage);
 
     // Also log it to the receipts log as a record, so there's a dated history entry.
     const sheet = SpreadsheetApp.openById(RECEIPTS_LOG_SHEET_ID).getSheets()[0];
-    sheet.appendRow([dateStr ? new Date(dateStr) : new Date(), 'Backfilled (admin)', unit, itemName, '', '', 'Historical baseline entered manually' + (dateStr ? ' -- service date: ' + dateStr : ''), '']);
+    sheet.appendRow([dateStr ? new Date(dateStr) : new Date(), 'Backfilled (admin)', unit, itemName, '', '', 'Historical baseline entered manually' + (dateStr ? ' -- service date: ' + dateStr : '') + (estimated ? ' -- mileage estimated from date' : ''), '']);
 
-    return jsonOut_({ ok: true, unit: unit, item: itemName, mileage: mileage });
+    return jsonOut_({ ok: true, unit: unit, item: itemName, mileage: mileage, estimated: estimated });
   } catch (err) {
     return jsonOut_({ ok: false, error: String(err) });
   }
