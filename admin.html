@@ -73,6 +73,19 @@
     background:var(--panel-alt);border:1px solid var(--steel);color:var(--text-muted);border-radius:4px;padding:7px 10px;cursor:pointer;
   }
   .admin-btn:active{border-color:var(--amber);color:var(--amber-bright);}
+  .view-toggle{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;
+    padding:6px 12px;border-radius:20px;border:1px solid var(--steel);background:transparent;color:var(--text-muted);cursor:pointer;
+  }
+  .view-toggle.active{background:var(--amber);border-color:var(--amber);color:#1a1408;font-weight:600;}
+  .service-group{background:var(--panel);border:1px solid var(--steel);border-radius:6px;padding:14px 16px;margin-bottom:12px;}
+  .service-group-hdr{display:flex;justify-content:space-between;align-items:center;font-family:'Oswald',sans-serif;font-size:16px;text-transform:uppercase;margin-bottom:8px;}
+  .service-group-count{font-family:'JetBrains Mono',monospace;font-size:11px;}
+  .service-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(58,54,46,.5);font-size:13px;}
+  .service-row:last-child{border-bottom:none;}
+  .service-row .s{font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;}
+  .service-row .s.overdue{color:var(--rust-bright);}
+  .service-row .s.due_soon{color:var(--amber-bright);}
 </style>
 </head>
 <body>
@@ -91,7 +104,13 @@
   <div style="font-family:'Oswald',sans-serif;font-size:16px;text-transform:uppercase;letter-spacing:.03em;color:var(--amber-bright);margin:26px 0 10px;">Weekly Reporting</div>
   <div id="staleBox"></div>
 
-  <div style="font-family:'Oswald',sans-serif;font-size:16px;text-transform:uppercase;letter-spacing:.03em;color:var(--amber-bright);margin:26px 0 10px;">Vehicle Status</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin:26px 0 10px;">
+    <div style="font-family:'Oswald',sans-serif;font-size:16px;text-transform:uppercase;letter-spacing:.03em;color:var(--amber-bright);">By Service</div>
+    <div style="display:flex;gap:6px;">
+      <button class="view-toggle active" id="viewServiceBtn" onclick="setView('service')">By Service</button>
+      <button class="view-toggle" id="viewVehicleBtn" onclick="setView('vehicle')">By Vehicle</button>
+    </div>
+  </div>
   <div id="content"><div class="loading">Loading fleet status…</div></div>
 </div>
 
@@ -112,7 +131,11 @@ async function load(){
   }
 }
 
+let currentFleet = [];
+let currentView = 'service';
+
 function render(fleet){
+  currentFleet = fleet;
   const counts = { overdue: 0, due_soon: 0, ok: 0, no_data: 0 };
   fleet.forEach(f => { counts[f.worst === 'no_baseline' ? 'no_data' : f.worst]++; });
 
@@ -137,6 +160,64 @@ function render(fleet){
         </div>
       `).join('');
 
+  renderContent();
+}
+
+function setView(v){
+  currentView = v;
+  document.getElementById('viewServiceBtn').classList.toggle('active', v === 'service');
+  document.getElementById('viewVehicleBtn').classList.toggle('active', v === 'vehicle');
+  renderContent();
+}
+
+function renderContent(){
+  if(currentView === 'service') renderByService(currentFleet);
+  else renderByVehicle(currentFleet);
+}
+
+function renderByService(fleet){
+  const active = fleet.filter(f => f.active);
+  const groups = {};
+
+  function addTo(name, f, status, detail){
+    if(status !== 'overdue' && status !== 'due_soon') return;
+    if(!groups[name]) groups[name] = [];
+    groups[name].push({ unit: f.unit, assigned: f.assigned, status: status, detail: detail });
+  }
+
+  active.forEach(f => {
+    f.docItems.forEach(i => addTo(i.item, f, i.status, i.status === 'overdue' ? 'Overdue since ' + i.dateValue : 'Due ' + i.dateValue));
+    f.items.forEach(i => addTo(i.item, f, i.status, i.status === 'overdue' ? 'Overdue by ' + Math.abs(i.remaining).toLocaleString() + ' mi' : 'Due in ' + i.remaining.toLocaleString() + ' mi'));
+  });
+
+  const groupNames = Object.keys(groups).sort((a, b) => groups[b].length - groups[a].length);
+
+  if(groupNames.length === 0){
+    document.getElementById('content').innerHTML = `<div class="loading">Nothing overdue or due soon across the active fleet.</div>`;
+    return;
+  }
+
+  document.getElementById('content').innerHTML = groupNames.map(name => {
+    const rows = groups[name].sort((a, b) => (a.status === 'overdue' ? 0 : 1) - (b.status === 'overdue' ? 0 : 1));
+    const overdueN = rows.filter(r => r.status === 'overdue').length;
+    return `
+      <div class="service-group">
+        <div class="service-group-hdr">
+          <span>${esc(name)}</span>
+          <span class="service-group-count" style="color:${overdueN ? 'var(--rust-bright)' : 'var(--amber-bright)'}">${rows.length} vehicle${rows.length === 1 ? '' : 's'}</span>
+        </div>
+        ${rows.map(r => `
+          <div class="service-row">
+            <span>${esc(r.unit)}${r.assigned ? ' — ' + esc(r.assigned) : ''}</span>
+            <span class="s ${r.status}">${esc(r.detail)}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }).join('');
+}
+
+function renderByVehicle(fleet){
   document.getElementById('content').innerHTML = fleet.map((f, idx) => {
     const worst = f.worst === 'no_baseline' ? 'no_data' : f.worst;
     return `
