@@ -101,7 +101,7 @@
 
 <script>
 // ---- CONFIGURE THIS: paste your Apps Script Web App URL here after deploying ----
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzLmlH_8rtsZNLOj2rnAWqRqfFmY9HbUgwquHuLNpoaJ7kh8hAQPnRpxk_0NshrbWEQ/exec";
+const APPS_SCRIPT_URL = "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
 
 const FALLBACK_UNITS = ["Unit 1","Unit 2","Unit 3","Unit 4","Unit 5","Unit 6","Unit 8","Unit 9","Unit 10","Unit 11","Unit 12","Unit 13","Unit 14","Unit 15","Unit 16","Unit 19","Unit 20","Unit 21","Unit 22","Unit 23","Unit 24","Unit 25","Unit 26","Unit 27","Unit 28","Unit 29","Unit 30","Unit 31"];
 
@@ -175,14 +175,10 @@ function showResult(data){
 
   const itemsBox = document.getElementById('itemsBox');
   const flagged = data.results.filter(r => r.status === 'overdue' || r.status === 'due_soon');
-  const unknown = data.results.filter(r => r.status === 'unknown');
+  const justSet = data.baselinesJustSet || [];
 
-  if(flagged.length === 0 && unknown.length === data.results.length){
-    itemsBox.innerHTML = '';
-    document.getElementById('extraMsg').textContent = "No service baseline is on file for this unit yet, so we can't flag anything due — once someone logs a starting mileage per service item, this'll kick in automatically.";
-  } else if(flagged.length === 0){
+  if(flagged.length === 0){
     itemsBox.innerHTML = '<div class="item ok"><span class="name">All caught up</span><span class="stat">Nothing due soon</span></div>';
-    document.getElementById('extraMsg').textContent = '';
   } else {
     itemsBox.innerHTML = flagged.map(r => `
       <div class="item ${r.status}">
@@ -190,8 +186,11 @@ function showResult(data){
         <span class="stat">${r.status === 'overdue' ? 'Overdue' : 'Due Soon'} — ${Math.abs(r.remaining).toLocaleString()} mi</span>
       </div>
     `).join('');
-    document.getElementById('extraMsg').textContent = unknown.length ? (unknown.length + ' other item(s) have no baseline on file yet.') : '';
   }
+
+  document.getElementById('extraMsg').textContent = justSet.length
+    ? ('Started tracking from this reading: ' + justSet.join(', ') + '.')
+    : '';
 
   document.getElementById('againBtn').style.display = 'block';
 }
