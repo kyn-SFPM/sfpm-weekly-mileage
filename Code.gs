@@ -24,9 +24,86 @@ const RECEIPTS_LOG_SHEET_ID = '1Vf3hi4ao7EkcfZ201-Dvw4cHqBB4QcW3Yq2zevBNG0I';
 const DUE_SOON_BUFFER = 500; // flag as "due soon" within this many miles of the interval
 
 function doGet(e) {
+  const mode = (e && e.parameter && e.parameter.mode) || 'form';
+  if (mode === 'admin') {
+    return jsonOut_(buildFleetStatus_());
+  }
   const roster = getRoster_();
   const intervals = getIntervals_();
   return jsonOut_({ roster: roster, intervals: intervals });
+}
+
+function buildFleetStatus_() {
+  const roster = getRoster_();
+  const intervals = getIntervals_();
+  const latestMileage = getLatestMileageByUnit_();
+  const baselineSheet = SpreadsheetApp.openById(BASELINE_SHEET_ID).getSheets()[0];
+  const baselineData = baselineSheet.getDataRange().getValues();
+  const baselineHeaders = baselineData[0];
+
+  const fleet = roster.map(function (r) {
+    const unit = r.unit;
+    const latest = latestMileage[unit];
+    const row = baselineData.slice(1).find(function (br) { return br[0] === unit; });
+
+    const items = intervals.map(function (item) {
+      if (!latest) {
+        return { item: item.name, status: 'no_data' };
+      }
+      const colIndex = baselineHeaders.indexOf(item.name);
+      const lastAt = row ? row[colIndex] : '';
+      if (lastAt === '' || lastAt === undefined || lastAt === null) {
+        return { item: item.name, status: 'no_baseline' };
+      }
+      const since = latest.mileage - Number(lastAt);
+      const remaining = item.miles - since;
+      if (remaining <= 0) return { item: item.name, status: 'overdue', remaining: remaining };
+      if (remaining <= DUE_SOON_BUFFER) return { item: item.name, status: 'due_soon', remaining: remaining };
+      return { item: item.name, status: 'ok', remaining: remaining };
+    });
+
+    const overdueCount = items.filter(function (i) { return i.status === 'overdue'; }).length;
+    const dueSoonCount = items.filter(function (i) { return i.status === 'due_soon'; }).length;
+    let worst = 'ok';
+    if (!latest) worst = 'no_data';
+    else if (overdueCount > 0) worst = 'overdue';
+    else if (dueSoonCount > 0) worst = 'due_soon';
+
+    return {
+      unit: unit,
+      assigned: r.assigned,
+      entity: r.entity,
+      yearMakeModel: [r.year, r.make, r.model].filter(Boolean).join(' '),
+      latestMileage: latest ? latest.mileage : null,
+      latestDate: latest ? latest.timestamp : null,
+      worst: worst,
+      overdueCount: overdueCount,
+      dueSoonCount: dueSoonCount,
+      items: items
+    };
+  });
+
+  const order = { overdue: 0, due_soon: 1, no_data: 2, no_baseline: 2, ok: 3 };
+  fleet.sort(function (a, b) { return order[a.worst] - order[b.worst]; });
+
+  return { fleet: fleet, generatedAt: new Date() };
+}
+
+function getLatestMileageByUnit_() {
+  const sheet = SpreadsheetApp.openById(LOG_SHEET_ID).getSheets()[0];
+  const data = sheet.getDataRange().getValues();
+  const rows = data.slice(1); // Timestamp, Employee, Unit, Mileage, WeekEnding, Notes
+  const latest = {};
+  rows.forEach(function (r) {
+    const unit = r[2];
+    const mileage = Number(r[3]);
+    const timestamp = r[0];
+    if (!unit || !mileage) return;
+    if (!latest[unit] || timestamp > latest[unit].timestamp) {
+      latest[unit] = { mileage: mileage, timestamp: timestamp };
+    }
+  });
+  return latest;
 }
 
 function doPost(e) {
