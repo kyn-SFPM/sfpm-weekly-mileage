@@ -78,6 +78,9 @@ function buildFleetStatus_() {
     if (overdueCount > 0 || docOverdue > 0) worst = 'overdue';
     else if (dueSoonCount > 0 || docDueSoon > 0) worst = 'due_soon';
 
+    const daysSinceReport = latest ? Math.floor((new Date() - new Date(latest.timestamp)) / 86400000) : null;
+    const reportStale = daysSinceReport === null || daysSinceReport > 7;
+
     return {
       unit: unit,
       assigned: r.assigned,
@@ -87,6 +90,8 @@ function buildFleetStatus_() {
       plate: r.plate,
       latestMileage: latest ? latest.mileage : null,
       latestDate: latest ? latest.timestamp : null,
+      daysSinceReport: daysSinceReport,
+      reportStale: reportStale,
       worst: worst,
       overdueCount: overdueCount + docOverdue,
       dueSoonCount: dueSoonCount + docDueSoon,
