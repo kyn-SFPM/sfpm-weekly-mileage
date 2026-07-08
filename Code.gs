@@ -18,6 +18,8 @@ const ROSTER_SHEET_ID = '1KvQ4rcQHtoeDbVnNEXQBV7G2eqzFMdq7lFewjcWmsjY';
 const INTERVALS_SHEET_ID = '1sKpBWxmQcUujuZJrvS9T10NEb-0XrhQTaVaWone75Kw';
 const BASELINE_SHEET_ID = '1JpffVRqJpO0StT-7QhBpoYLPvKYmEN0BOC9uA9m3Bjw';
 const LOG_SHEET_ID = '1MGgd9U_ciUi5HpuVti7uOqOCGioNefsvH1eNuEdl6YI';
+const RECEIPTS_FOLDER_ID = '1D3ABMoGUb3f6IknmDJapfZ5XvDxxKw-l';
+const RECEIPTS_LOG_SHEET_ID = '1Vf3hi4ao7EkcfZ201-Dvw4cHqBB4QcW3Yq2zevBNG0I';
 
 const DUE_SOON_BUFFER = 500; // flag as "due soon" within this many miles of the interval
 
@@ -28,6 +30,49 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  const formType = (e.parameter.formType || 'mileage');
+  if (formType === 'receipt') {
+    return handleReceipt_(e);
+  }
+  return handleMileage_(e);
+}
+
+function handleReceipt_(e) {
+  try {
+    const params = e.parameter;
+    const employee = (params.employee || '').trim();
+    const unit = (params.unit || '').trim();
+    const serviceType = (params.serviceType || '').trim();
+    const vendor = (params.vendor || '').trim();
+    const cost = (params.cost || '').trim();
+    const notes = (params.notes || '').trim();
+    const photoBase64 = params.photo;
+    const photoMime = params.photoMime || 'image/jpeg';
+
+    if (!employee || !unit) {
+      return jsonOut_({ ok: false, error: 'Missing employee or unit.' });
+    }
+
+    let fileUrl = '';
+    if (photoBase64) {
+      const bytes = Utilities.base64Decode(photoBase64);
+      const blob = Utilities.newBlob(bytes, photoMime, unit + '_' + new Date().getTime() + '.jpg');
+      const folder = DriveApp.getFolderById(RECEIPTS_FOLDER_ID);
+      const file = folder.createFile(blob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      fileUrl = file.getUrl();
+    }
+
+    const sheet = SpreadsheetApp.openById(RECEIPTS_LOG_SHEET_ID).getSheets()[0];
+    sheet.appendRow([new Date(), employee, unit, serviceType, vendor, cost, notes, fileUrl]);
+
+    return jsonOut_({ ok: true, unit: unit });
+  } catch (err) {
+    return jsonOut_({ ok: false, error: String(err) });
+  }
+}
+
+function handleMileage_(e) {
   try {
     const params = e.parameter;
     const employee = (params.employee || '').trim();
