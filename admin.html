@@ -82,6 +82,11 @@
   </div>
 
   <div class="stats" id="statsBox"></div>
+
+  <div style="font-family:'Oswald',sans-serif;font-size:16px;text-transform:uppercase;letter-spacing:.03em;color:var(--amber-bright);margin:26px 0 10px;">Weekly Reporting</div>
+  <div id="staleBox"></div>
+
+  <div style="font-family:'Oswald',sans-serif;font-size:16px;text-transform:uppercase;letter-spacing:.03em;color:var(--amber-bright);margin:26px 0 10px;">Vehicle Status</div>
   <div id="content"><div class="loading">Loading fleet status…</div></div>
 </div>
 
@@ -112,6 +117,20 @@ function render(fleet){
     <div class="stat ok"><div class="n">${counts.ok}</div><div class="l">OK</div></div>
     <div class="stat no_data"><div class="n">${counts.no_data}</div><div class="l">No Data Yet</div></div>
   `;
+
+  const stale = fleet.filter(f => f.reportStale && f.assigned && !/office only|not in use|sold|scrap/i.test(f.assigned));
+  document.getElementById('staleBox').innerHTML = stale.length === 0
+    ? `<div class="card ok" style="border-left-color:var(--olive);"><div class="card-name" style="font-size:14px;">Everyone's current — no overdue weeklies</div></div>`
+    : stale.map(f => `
+        <div class="card overdue" style="padding:10px 16px;">
+          <div class="card-top" style="cursor:default;">
+            <div>
+              <div class="card-name" style="font-size:14px;">${esc(f.unit)}${f.assigned ? ' — ' + esc(f.assigned) : ''}</div>
+              <div class="card-mileage">${f.daysSinceReport === null ? 'Never reported' : f.daysSinceReport + ' days since last mileage entry'}</div>
+            </div>
+          </div>
+        </div>
+      `).join('');
 
   document.getElementById('content').innerHTML = fleet.map((f, idx) => {
     const worst = f.worst === 'no_baseline' ? 'no_data' : f.worst;
