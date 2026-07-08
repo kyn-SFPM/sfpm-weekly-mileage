@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>SFPM — Weekly Mileage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#121110; --panel:#1c1a17; --panel-alt:#242019;
+    --steel:#3a362e; --steel-lt:#514b3e;
+    --amber:#c98a3b; --amber-bright:#e0a855;
+    --rust:#a63a2e; --rust-bright:#c4523f;
+    --olive:#5c6b47; --olive-bright:#7c8f5f;
+    --text:#ede7d9; --text-muted:#9c9483; --text-dim:#655f52;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:radial-gradient(ellipse at top, rgba(201,138,59,0.06), transparent 60%), var(--bg);
+    color:var(--text);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh;
+  }
+  .wrap{max-width:520px;margin:0 auto;padding:24px 18px 60px;}
+  .hdr{padding:8px 4px 20px;border-bottom:1px solid var(--steel);margin-bottom:24px;position:relative;}
+  .hdr::after{content:"";position:absolute;bottom:-1px;left:0;width:64px;height:3px;background:var(--amber);}
+  .eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.18em;color:var(--amber);text-transform:uppercase;margin-bottom:6px;}
+  h1{font-family:'Oswald',sans-serif;font-weight:700;font-size:26px;letter-spacing:.02em;text-transform:uppercase;margin:0;}
+  .sub{color:var(--text-muted);font-size:13px;margin-top:6px;}
+
+  label{display:block;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);margin:16px 0 5px;}
+  input, select, textarea{
+    width:100%;background:var(--panel-alt);border:1px solid var(--steel);border-radius:4px;color:var(--text);
+    padding:12px 12px;font-family:'Inter',sans-serif;font-size:15px;
+  }
+  input:focus, select:focus, textarea:focus{outline:none;border-color:var(--amber);}
+
+  .btn{
+    font-family:'Oswald',sans-serif;font-weight:600;font-size:15px;text-transform:uppercase;letter-spacing:.04em;
+    padding:14px;border-radius:4px;border:none;cursor:pointer;width:100%;margin-top:22px;background:var(--amber);color:#1a1408;
+  }
+  .btn:disabled{opacity:.5;}
+
+  .result{display:none;margin-top:26px;padding-top:20px;border-top:1px solid var(--steel);}
+  .thanks{font-family:'Oswald',sans-serif;font-size:19px;text-transform:uppercase;margin-bottom:14px;}
+  .item{
+    display:flex;justify-content:space-between;align-items:center;gap:10px;
+    background:var(--panel);border:1px solid var(--steel);border-left:3px solid var(--steel-lt);
+    border-radius:4px;padding:10px 12px;margin-bottom:8px;font-size:13.5px;
+  }
+  .item.overdue{border-left-color:var(--rust);}
+  .item.due_soon{border-left-color:var(--amber);}
+  .item.ok{border-left-color:var(--olive);}
+  .item .name{color:var(--text);}
+  .item .stat{font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;white-space:nowrap;}
+  .item.overdue .stat{color:var(--rust-bright);}
+  .item.due_soon .stat{color:var(--amber-bright);}
+  .item.ok .stat{color:var(--olive-bright);}
+  .item.unknown .stat{color:var(--text-dim);}
+
+  .msg{font-size:13px;color:var(--text-muted);margin-top:16px;line-height:1.5;}
+  .err{display:none;color:var(--rust-bright);font-size:13px;margin-top:16px;}
+  .again{display:none;margin-top:18px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <div class="eyebrow">Service First Property Management</div>
+    <h1>Weekly Mileage</h1>
+    <div class="sub">Log your unit's mileage — we'll flag anything coming due.</div>
+  </div>
+
+  <form id="mileageForm">
+    <label>Your Name</label>
+    <input id="employee" required placeholder="First and last name">
+
+    <label>Vehicle / Unit</label>
+    <select id="unit" required><option value="">Loading roster…</option></select>
+
+    <label>Current Mileage</label>
+    <input id="mileage" type="number" required placeholder="e.g. 84210">
+
+    <label>Week Ending</label>
+    <input id="weekEnding" type="date">
+
+    <label>Notes (optional)</label>
+    <textarea id="notes" rows="2" placeholder="Anything worth flagging — noise, warning light, etc."></textarea>
+
+    <button class="btn" type="submit" id="submitBtn">Submit Mileage</button>
+    <div class="err" id="errBox"></div>
+  </form>
+
+  <div class="result" id="resultBox">
+    <div class="thanks" id="thanksMsg"></div>
+    <div id="itemsBox"></div>
+    <div class="msg" id="extraMsg"></div>
+  </div>
+
+  <button class="btn again" id="againBtn" style="background:transparent;border:1px solid var(--steel);color:var(--text-muted);">Log Another</button>
+</div>
+
+<script>
+// ---- CONFIGURE THIS: paste your Apps Script Web App URL here after deploying ----
+const APPS_SCRIPT_URL = "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
+
+const FALLBACK_UNITS = ["Unit 1","Unit 2","Unit 3","Unit 4","Unit 5","Unit 6","Unit 8","Unit 9","Unit 10","Unit 11","Unit 12","Unit 13","Unit 14","Unit 15","Unit 16","Unit 19","Unit 20","Unit 21","Unit 22","Unit 23","Unit 24","Unit 25","Unit 26","Unit 27","Unit 28","Unit 29","Unit 30","Unit 31"];
+
+const unitSelect = document.getElementById('unit');
+const weekEndingInput = document.getElementById('weekEnding');
+const today = new Date();
+weekEndingInput.value = today.toISOString().slice(0,10);
+
+function populateUnits(list){
+  unitSelect.innerHTML = '<option value="">Select your unit…</option>' + list.map(u => `<option value="${u}">${u}</option>`).join('');
+}
+populateUnits(FALLBACK_UNITS);
+
+async function loadRoster(){
+  if(APPS_SCRIPT_URL.indexOf('PASTE_') === 0) return; // not deployed yet
+  try{
+    const res = await fetch(APPS_SCRIPT_URL);
+    const data = await res.json();
+    if(data.roster && data.roster.length){
+      populateUnits(data.roster.map(r => r.unit));
+    }
+  }catch(e){
+    // keep fallback list
+  }
+}
+loadRoster();
+
+document.getElementById('mileageForm').addEventListener('submit', async function(e){
+  e.preventDefault();
+  const errBox = document.getElementById('errBox');
+  errBox.style.display = 'none';
+
+  if(APPS_SCRIPT_URL.indexOf('PASTE_') === 0){
+    errBox.textContent = "This form isn't connected to the backend yet — paste the Apps Script Web App URL into APPS_SCRIPT_URL in the code.";
+    errBox.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+
+  const fd = new FormData();
+  fd.append('employee', document.getElementById('employee').value.trim());
+  fd.append('unit', document.getElementById('unit').value);
+  fd.append('mileage', document.getElementById('mileage').value);
+  fd.append('weekEnding', document.getElementById('weekEnding').value);
+  fd.append('notes', document.getElementById('notes').value.trim());
+
+  try{
+    const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: fd });
+    const data = await res.json();
+    if(!data.ok){
+      throw new Error(data.error || 'Something went wrong');
+    }
+    showResult(data);
+  }catch(err){
+    errBox.textContent = "Couldn't submit that — check your connection and try again.";
+    errBox.style.display = 'block';
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Submit Mileage';
+  }
+});
+
+function showResult(data){
+  document.getElementById('mileageForm').style.display = 'none';
+  const box = document.getElementById('resultBox');
+  box.style.display = 'block';
+  document.getElementById('thanksMsg').textContent = 'Thanks — ' + data.unit + ' logged at ' + Number(data.mileage).toLocaleString() + ' mi';
+
+  const itemsBox = document.getElementById('itemsBox');
+  const flagged = data.results.filter(r => r.status === 'overdue' || r.status === 'due_soon');
+  const unknown = data.results.filter(r => r.status === 'unknown');
+
+  if(flagged.length === 0 && unknown.length === data.results.length){
+    itemsBox.innerHTML = '';
+    document.getElementById('extraMsg').textContent = "No service baseline is on file for this unit yet, so we can't flag anything due — once someone logs a starting mileage per service item, this'll kick in automatically.";
+  } else if(flagged.length === 0){
+    itemsBox.innerHTML = '<div class="item ok"><span class="name">All caught up</span><span class="stat">Nothing due soon</span></div>';
+    document.getElementById('extraMsg').textContent = '';
+  } else {
+    itemsBox.innerHTML = flagged.map(r => `
+      <div class="item ${r.status}">
+        <span class="name">${r.item}</span>
+        <span class="stat">${r.status === 'overdue' ? 'Overdue' : 'Due Soon'} — ${Math.abs(r.remaining).toLocaleString()} mi</span>
+      </div>
+    `).join('');
+    document.getElementById('extraMsg').textContent = unknown.length ? (unknown.length + ' other item(s) have no baseline on file yet.') : '';
+  }
+
+  document.getElementById('againBtn').style.display = 'block';
+}
+
+document.getElementById('againBtn').addEventListener('click', function(){
+  document.getElementById('mileageForm').reset();
+  weekEndingInput.value = today.toISOString().slice(0,10);
+  document.getElementById('mileageForm').style.display = 'block';
+  document.getElementById('resultBox').style.display = 'none';
+  this.style.display = 'none';
+});
+</script>
+</body>
+</html>
