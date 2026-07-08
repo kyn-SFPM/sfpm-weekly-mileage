@@ -68,6 +68,11 @@
   .ditem .s.due_soon{color:var(--amber-bright);}
   .ditem .s.ok{color:var(--olive-bright);}
   .ditem .s.no_baseline{color:var(--text-dim);}
+  .admin-btn{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;
+    background:var(--panel-alt);border:1px solid var(--steel);color:var(--text-muted);border-radius:4px;padding:7px 10px;cursor:pointer;
+  }
+  .admin-btn:active{border-color:var(--amber);color:var(--amber-bright);}
 </style>
 </head>
 <body>
@@ -118,7 +123,7 @@ function render(fleet){
     <div class="stat no_data"><div class="n">${counts.no_data}</div><div class="l">No Data Yet</div></div>
   `;
 
-  const stale = fleet.filter(f => f.reportStale && f.assigned && !/office only|not in use|sold|scrap/i.test(f.assigned));
+  const stale = fleet.filter(f => f.reportStale && f.active);
   document.getElementById('staleBox').innerHTML = stale.length === 0
     ? `<div class="card ok" style="border-left-color:var(--olive);"><div class="card-name" style="font-size:14px;">Everyone's current — no overdue weeklies</div></div>`
     : stale.map(f => `
@@ -135,10 +140,10 @@ function render(fleet){
   document.getElementById('content').innerHTML = fleet.map((f, idx) => {
     const worst = f.worst === 'no_baseline' ? 'no_data' : f.worst;
     return `
-      <div class="card ${worst}">
+      <div class="card ${worst}" style="${f.active ? '' : 'opacity:.55;'}">
         <div class="card-top" onclick="toggle(${idx})">
           <div>
-            <div class="card-name">${esc(f.unit)}${f.assigned ? ' — ' + esc(f.assigned) : ''}</div>
+            <div class="card-name">${esc(f.unit)}${f.assigned ? ' — ' + esc(f.assigned) : ''}${f.active ? '' : ' (INACTIVE)'}</div>
             <div class="card-sub">${esc(f.entity || '')} ${esc(f.yearMakeModel || '')}${f.plate ? ' · ' + esc(f.plate) : ''}</div>
             ${f.latestMileage ? `<div class="card-mileage">${Number(f.latestMileage).toLocaleString()} mi as of ${new Date(f.latestDate).toLocaleDateString()}</div>` : `<div class="card-mileage">No mileage logged yet</div>`}
           </div>
@@ -158,10 +163,51 @@ function render(fleet){
               <span class="s ${i.status}">${i.status === 'overdue' ? 'Overdue ' + Math.abs(i.remaining).toLocaleString() + ' mi' : i.status === 'due_soon' ? 'Due in ' + i.remaining.toLocaleString() + ' mi' : i.status === 'ok' ? i.remaining.toLocaleString() + ' mi left' : STATUS_LABEL[i.status]}</span>
             </div>
           `).join('')}
+
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--steel);display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="admin-btn" onclick="event.stopPropagation(); setActive('${esc(f.unit)}', ${!f.active})">${f.active ? 'Mark Inactive' : 'Mark Active'}</button>
+            <button class="admin-btn" onclick="event.stopPropagation(); openBackfill('${esc(f.unit)}')">Backfill Known Service Date</button>
+          </div>
         </div>
       </div>
     `;
   }).join('');
+}
+
+async function setActive(unit, active){
+  if(!confirm((active ? 'Mark ' : 'Mark ') + unit + (active ? ' active again?' : ' inactive? It will be excluded from weekly reporting checks.'))) return;
+  const fd = new FormData();
+  fd.append('formType', 'setActive');
+  fd.append('unit', unit);
+  fd.append('active', active);
+  await fetch(APPS_SCRIPT_URL, { method: 'POST', body: fd });
+  load();
+}
+
+function openBackfill(unit){
+  const item = prompt('Which service item are you backfilling for ' + unit + '?\\n(e.g. Oil Change, Rotate Tires, Full Check Up, Flush Radiator Fluid, Flush Transmission Fluid, Fuel Injector Maintenance, Replace Air Filter, Replace Fuel Filter, Check Alignment, Replace Spark Plugs)');
+  if(!item) return;
+  const mileage = prompt('What mileage was it done at?');
+  if(!mileage) return;
+  const date = prompt('What date was it done? (YYYY-MM-DD, optional — for your own records)') || '';
+  submitBackfill(unit, item.trim(), mileage.trim(), date.trim());
+}
+
+async function submitBackfill(unit, item, mileage, date){
+  const fd = new FormData();
+  fd.append('formType', 'backfillService');
+  fd.append('unit', unit);
+  fd.append('serviceItem', item);
+  fd.append('mileage', mileage);
+  fd.append('date', date);
+  const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: fd });
+  const data = await res.json();
+  if(data.ok){
+    alert('Saved: ' + unit + ' — ' + item + ' set to ' + Number(mileage).toLocaleString() + ' mi.');
+    load();
+  } else {
+    alert('Could not save: ' + (data.error || 'unknown error'));
+  }
 }
 
 function toggle(idx){
