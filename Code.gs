@@ -14,7 +14,7 @@
  *    change this script.
  */
 
-const ROSTER_SHEET_ID = '1KvQ4rcQHtoeDbVnNEXQBV7G2eqzFMdq7lFewjcWmsjY';
+const ROSTER_SHEET_ID = '1CQ_KcPvaGx11iY3bDNI-TqNWXbhAk3zMDU00kmMVcAY';
 const INTERVALS_SHEET_ID = '1sKpBWxmQcUujuZJrvS9T10NEb-0XrhQTaVaWone75Kw';
 const BASELINE_SHEET_ID = '1JpffVRqJpO0StT-7QhBpoYLPvKYmEN0BOC9uA9m3Bjw';
 const LOG_SHEET_ID = '1MGgd9U_ciUi5HpuVti7uOqOCGioNefsvH1eNuEdl6YI';
@@ -64,22 +64,34 @@ function buildFleetStatus_() {
 
     const overdueCount = items.filter(function (i) { return i.status === 'overdue'; }).length;
     const dueSoonCount = items.filter(function (i) { return i.status === 'due_soon'; }).length;
+
+    const docItems = [
+      { item: 'Tags/Registration', status: dateStatus_(r.tagsExpire), dateValue: r.tagsExpire },
+      { item: 'Insurance', status: dateStatus_(r.insuranceExpires), dateValue: r.insuranceExpires },
+      { item: 'Inspection', status: dateStatus_(r.inspectionDate), dateValue: r.inspectionDate }
+    ];
+    const docOverdue = docItems.filter(function (i) { return i.status === 'overdue'; }).length;
+    const docDueSoon = docItems.filter(function (i) { return i.status === 'due_soon'; }).length;
+
     let worst = 'ok';
     if (!latest) worst = 'no_data';
-    else if (overdueCount > 0) worst = 'overdue';
-    else if (dueSoonCount > 0) worst = 'due_soon';
+    if (overdueCount > 0 || docOverdue > 0) worst = 'overdue';
+    else if (dueSoonCount > 0 || docDueSoon > 0) worst = 'due_soon';
 
     return {
       unit: unit,
       assigned: r.assigned,
       entity: r.entity,
       yearMakeModel: [r.year, r.make, r.model].filter(Boolean).join(' '),
+      vin: r.vin,
+      plate: r.plate,
       latestMileage: latest ? latest.mileage : null,
       latestDate: latest ? latest.timestamp : null,
       worst: worst,
-      overdueCount: overdueCount,
-      dueSoonCount: dueSoonCount,
-      items: items
+      overdueCount: overdueCount + docOverdue,
+      dueSoonCount: dueSoonCount + docDueSoon,
+      items: items,
+      docItems: docItems
     };
   });
 
@@ -205,8 +217,35 @@ function getRoster_() {
   return rows
     .filter(function (r) { return r[0]; })
     .map(function (r) {
-      return { unit: r[0], assigned: r[1], entity: r[2], year: r[3], make: r[4], model: r[5] };
+      return {
+        unit: r[0], assigned: r[1], entity: r[2], year: r[3], make: r[4], model: r[5],
+        vin: r[6], plate: r[7], tagsExpire: fmtDate_(r[8]), insuranceExpires: fmtDate_(r[9]), inspectionDate: fmtDate_(r[10])
+      };
     });
+}
+
+function fmtDate_(v) {
+  if (!v) return '';
+  if (Object.prototype.toString.call(v) === '[object Date]') {
+    return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  return String(v);
+}
+
+function daysUntil_(dateStr) {
+  if (!dateStr) return null;
+  const target = new Date(dateStr + 'T00:00:00');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((target - today) / 86400000);
+}
+
+function dateStatus_(dateStr) {
+  const d = daysUntil_(dateStr);
+  if (d === null) return 'no_data';
+  if (d < 0) return 'overdue';
+  if (d <= 30) return 'due_soon';
+  return 'ok';
 }
 
 function getIntervals_() {
