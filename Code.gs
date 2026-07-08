@@ -14,7 +14,7 @@
  *    change this script.
  */
 
-const ROSTER_SHEET_ID = '1CQ_KcPvaGx11iY3bDNI-TqNWXbhAk3zMDU00kmMVcAY';
+const ROSTER_SHEET_ID = '1DNDODv5taegzsA7fzowtiYcHrLWzrSXemklV3I_zlac';
 const INTERVALS_SHEET_ID = '1sKpBWxmQcUujuZJrvS9T10NEb-0XrhQTaVaWone75Kw';
 const BASELINE_SHEET_ID = '1JpffVRqJpO0StT-7QhBpoYLPvKYmEN0BOC9uA9m3Bjw';
 const LOG_SHEET_ID = '1MGgd9U_ciUi5HpuVti7uOqOCGioNefsvH1eNuEdl6YI';
@@ -85,6 +85,7 @@ function buildFleetStatus_() {
       unit: unit,
       assigned: r.assigned,
       entity: r.entity,
+      active: r.active,
       yearMakeModel: [r.year, r.make, r.model].filter(Boolean).join(' '),
       vin: r.vin,
       plate: r.plate,
@@ -125,10 +126,46 @@ function getLatestMileageByUnit_() {
 
 function doPost(e) {
   const formType = (e.parameter.formType || 'mileage');
-  if (formType === 'receipt') {
-    return handleReceipt_(e);
-  }
+  if (formType === 'receipt') return handleReceipt_(e);
+  if (formType === 'setActive') return handleSetActive_(e);
+  if (formType === 'backfillService') return handleBackfillService_(e);
   return handleMileage_(e);
+}
+
+function handleSetActive_(e) {
+  try {
+    const unit = (e.parameter.unit || '').trim();
+    const active = e.parameter.active === 'true';
+    const sheet = SpreadsheetApp.openById(ROSTER_SHEET_ID).getSheets()[0];
+    const data = sheet.getDataRange().getValues();
+    const rowIndex = data.findIndex(function (r) { return r[0] === unit; });
+    if (rowIndex === -1) return jsonOut_({ ok: false, error: 'Unit not found.' });
+    sheet.getRange(rowIndex + 1, 12).setValue(active ? 'Yes' : 'No'); // column L = Active
+    return jsonOut_({ ok: true, unit: unit, active: active });
+  } catch (err) {
+    return jsonOut_({ ok: false, error: String(err) });
+  }
+}
+
+function handleBackfillService_(e) {
+  try {
+    const unit = (e.parameter.unit || '').trim();
+    const itemName = (e.parameter.serviceItem || '').trim();
+    const mileage = Number(e.parameter.mileage);
+    const dateStr = (e.parameter.date || '').trim(); // date the service was actually done, for your own records
+    if (!unit || !itemName || !mileage) {
+      return jsonOut_({ ok: false, error: 'Missing unit, service item, or mileage.' });
+    }
+    setBaselineCell_(unit, itemName, mileage);
+
+    // Also log it to the receipts log as a record, so there's a dated history entry.
+    const sheet = SpreadsheetApp.openById(RECEIPTS_LOG_SHEET_ID).getSheets()[0];
+    sheet.appendRow([dateStr ? new Date(dateStr) : new Date(), 'Backfilled (admin)', unit, itemName, '', '', 'Historical baseline entered manually' + (dateStr ? ' -- service date: ' + dateStr : ''), '']);
+
+    return jsonOut_({ ok: true, unit: unit, item: itemName, mileage: mileage });
+  } catch (err) {
+    return jsonOut_({ ok: false, error: String(err) });
+  }
 }
 
 function handleReceipt_(e) {
@@ -224,7 +261,8 @@ function getRoster_() {
     .map(function (r) {
       return {
         unit: r[0], assigned: r[1], entity: r[2], year: r[3], make: r[4], model: r[5],
-        vin: r[6], plate: r[7], tagsExpire: fmtDate_(r[8]), insuranceExpires: fmtDate_(r[9]), inspectionDate: fmtDate_(r[10])
+        vin: r[6], plate: r[7], tagsExpire: fmtDate_(r[8]), insuranceExpires: fmtDate_(r[9]), inspectionDate: fmtDate_(r[10]),
+        active: (r[11] === undefined || r[11] === '' || String(r[11]).toLowerCase() === 'yes')
       };
     });
 }
