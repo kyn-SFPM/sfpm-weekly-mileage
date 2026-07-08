@@ -220,6 +220,22 @@ function renderByService(fleet){
 function renderByVehicle(fleet){
   document.getElementById('content').innerHTML = fleet.map((f, idx) => {
     const worst = f.worst === 'no_baseline' ? 'no_data' : f.worst;
+    const allDocItems = f.docItems;
+    const allItems = f.items;
+    const flaggedDoc = allDocItems.filter(i => i.status === 'overdue' || i.status === 'due_soon');
+    const flaggedMileage = allItems.filter(i => i.status === 'overdue' || i.status === 'due_soon');
+    const okCount = (allDocItems.length - flaggedDoc.length) + (allItems.length - flaggedMileage.length);
+
+    const rowHtml = (i, isDoc) => `
+      <div class="ditem">
+        <span>${esc(i.item)}</span>
+        <span class="s ${i.status}">${
+          isDoc
+            ? (i.status === 'overdue' ? 'Overdue (' + esc(i.dateValue) + ')' : i.status === 'due_soon' ? 'Due Soon (' + esc(i.dateValue) + ')' : i.status === 'ok' ? esc(i.dateValue) : 'No Date On File')
+            : (i.status === 'overdue' ? 'Overdue ' + Math.abs(i.remaining).toLocaleString() + ' mi' : i.status === 'due_soon' ? 'Due in ' + i.remaining.toLocaleString() + ' mi' : i.status === 'ok' ? i.remaining.toLocaleString() + ' mi left' : STATUS_LABEL[i.status])
+        }</span>
+      </div>`;
+
     return `
       <div class="card ${worst}" style="${f.active ? '' : 'opacity:.55;'}">
         <div class="card-top" onclick="toggle(${idx})">
@@ -232,18 +248,15 @@ function renderByVehicle(fleet){
         </div>
         <div class="detail" id="detail-${idx}">
           ${f.vin ? `<div class="ditem"><span>VIN</span><span class="s">${esc(f.vin)}</span></div>` : ''}
-          ${f.docItems.map(i => `
-            <div class="ditem">
-              <span>${esc(i.item)}</span>
-              <span class="s ${i.status}">${i.status === 'overdue' ? 'Overdue (' + esc(i.dateValue) + ')' : i.status === 'due_soon' ? 'Due Soon (' + esc(i.dateValue) + ')' : i.status === 'ok' ? esc(i.dateValue) : 'No Date On File'}</span>
-            </div>
-          `).join('')}
-          ${f.items.map(i => `
-            <div class="ditem">
-              <span>${esc(i.item)}</span>
-              <span class="s ${i.status}">${i.status === 'overdue' ? 'Overdue ' + Math.abs(i.remaining).toLocaleString() + ' mi' : i.status === 'due_soon' ? 'Due in ' + i.remaining.toLocaleString() + ' mi' : i.status === 'ok' ? i.remaining.toLocaleString() + ' mi left' : STATUS_LABEL[i.status]}</span>
-            </div>
-          `).join('')}
+          ${flaggedDoc.length === 0 && flaggedMileage.length === 0 ? `<div class="ditem"><span>Nothing due</span><span class="s ok">All ${okCount} items current</span></div>` : ''}
+          ${flaggedDoc.map(i => rowHtml(i, true)).join('')}
+          ${flaggedMileage.map(i => rowHtml(i, false)).join('')}
+
+          <div id="full-list-${idx}" style="display:none;margin-top:8px;">
+            ${allDocItems.map(i => rowHtml(i, true)).join('')}
+            ${allItems.map(i => rowHtml(i, false)).join('')}
+          </div>
+          ${okCount > 0 ? `<div style="margin-top:8px;"><button class="admin-btn" onclick="event.stopPropagation(); toggleFullList(${idx})" id="full-list-btn-${idx}">Show full checklist (${okCount} more)</button></div>` : ''}
 
           <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--steel);display:flex;gap:8px;flex-wrap:wrap;">
             <button class="admin-btn" onclick="event.stopPropagation(); setActive('${esc(f.unit)}', ${!f.active})">${f.active ? 'Mark Inactive' : 'Mark Active'}</button>
@@ -253,6 +266,20 @@ function renderByVehicle(fleet){
       </div>
     `;
   }).join('');
+}
+
+function toggleFullList(idx){
+  const box = document.getElementById('full-list-' + idx);
+  const btn = document.getElementById('full-list-btn-' + idx);
+  const showing = box.style.display !== 'none';
+  if(showing){
+    box.style.display = 'none';
+    btn.textContent = btn.dataset.origLabel;
+  } else {
+    btn.dataset.origLabel = btn.textContent;
+    box.style.display = 'block';
+    btn.textContent = 'Hide full checklist';
+  }
 }
 
 async function setActive(unit, active){
