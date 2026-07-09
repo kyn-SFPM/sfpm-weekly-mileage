@@ -151,7 +151,7 @@ employeeInput.addEventListener('input', function(){
 async function loadRoster(){
   if(APPS_SCRIPT_URL.indexOf('PASTE_') === 0) return; // not deployed yet
   try{
-    const res = await fetch(APPS_SCRIPT_URL);
+    const res = await fetch(APPS_SCRIPT_URL + '?_t=' + Date.now(), {cache: 'no-store'});
     const data = await res.json();
     if(data.roster && data.roster.length){
       populateUnits(data.roster.map(r => ({ unit: r.unit, assigned: r.assigned })));
