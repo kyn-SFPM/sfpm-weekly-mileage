@@ -19,7 +19,7 @@ const INTERVALS_SHEET_ID = '1sKpBWxmQcUujuZJrvS9T10NEb-0XrhQTaVaWone75Kw';
 const BASELINE_SHEET_ID = '1_MVvcxxn2WIPRMwFcFl6_BguYUM9b25ioX_E8K8zW2U';
 const LOG_SHEET_ID = '1MGgd9U_ciUi5HpuVti7uOqOCGioNefsvH1eNuEdl6YI';
 const RECEIPTS_FOLDER_ID = '1D3ABMoGUb3f6IknmDJapfZ5XvDxxKw-l';
-const RECEIPTS_LOG_SHEET_ID = '1b_0Ujn9l0FJ4-QQRvWAWuyi8Bm1HvlnOwUyAdzbLBFM';
+const RECEIPTS_LOG_SHEET_ID = '1wswk6FZgrzOeDKlniJywX2T58MMe7fAYSNZVj8_ffaE';
 
 // Earliest/latest known odometer readings per unit, pulled from the historical
 // odometer export. Used to estimate mileage on a given date when backfilling
