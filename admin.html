@@ -132,7 +132,7 @@ const STATUS_LABEL = { overdue: 'Overdue', due_soon: 'Due Soon', ok: 'OK', no_da
 async function load(){
   document.getElementById('content').innerHTML = '<div class="loading">Loading fleet status…</div>';
   try{
-    const res = await fetch(APPS_SCRIPT_URL + '?mode=admin');
+    const res = await fetch(APPS_SCRIPT_URL + '?mode=admin&_t=' + Date.now(), {cache: 'no-store'});
     const data = await res.json();
     render(data.fleet);
     document.getElementById('stamp').textContent = 'Updated ' + new Date().toLocaleString();
