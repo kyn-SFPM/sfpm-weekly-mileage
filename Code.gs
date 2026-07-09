@@ -228,12 +228,35 @@ function handleBackfillService_(e) {
   }
 }
 
+const STANDARD_ITEM_MAP = {
+  'oil change': 'Oil Change',
+  'rotate tires': 'Rotate Tires',
+  'rotate tire': 'Rotate Tires',
+  'tire rotation': 'Rotate Tires',
+  'full check up': 'Full Check Up',
+  'full checkup': 'Full Check Up',
+  'flush radiator fluid': 'Flush Radiator Fluid',
+  'radiator flush': 'Flush Radiator Fluid',
+  'flush transmission fluid': 'Flush Transmission Fluid',
+  'transmission flush': 'Flush Transmission Fluid',
+  'fuel injector maintenance': 'Fuel Injector Maintenance',
+  'replace air filter': 'Replace Air Filter',
+  'air filter': 'Replace Air Filter',
+  'replace fuel filter': 'Replace Fuel Filter',
+  'fuel filter': 'Replace Fuel Filter',
+  'check alignment': 'Check Alignment',
+  'alignment': 'Check Alignment',
+  'replace spark plugs': 'Replace Spark Plugs',
+  'spark plugs': 'Replace Spark Plugs',
+};
+
 function handleReceipt_(e) {
   try {
     const params = e.parameter;
     const employee = (params.employee || '').trim();
     const unit = (params.unit || '').trim();
     const serviceType = (params.serviceType || '').trim();
+    const serviceMileage = Number(params.serviceMileage);
     const vendor = (params.vendor || '').trim();
     const cost = (params.cost || '').trim();
     const notes = (params.notes || '').trim();
@@ -254,10 +277,19 @@ function handleReceipt_(e) {
       fileUrl = file.getUrl();
     }
 
-    const sheet = SpreadsheetApp.openById(RECEIPTS_LOG_SHEET_ID).getSheets()[0];
-    sheet.appendRow([new Date(), employee, unit, serviceType, vendor, cost, notes, fileUrl]);
+    // If this matches a standard recurring service item and mileage was given,
+    // update the baseline automatically so the dashboard reflects it right away.
+    const canonical = STANDARD_ITEM_MAP[serviceType.toLowerCase().trim()];
+    let baselineUpdated = false;
+    if (canonical && serviceMileage) {
+      setBaselineCell_(unit, canonical, serviceMileage);
+      baselineUpdated = true;
+    }
 
-    return jsonOut_({ ok: true, unit: unit });
+    const sheet = SpreadsheetApp.openById(RECEIPTS_LOG_SHEET_ID).getSheets()[0];
+    sheet.appendRow([new Date(), employee, unit, serviceType, vendor, cost, notes + (baselineUpdated ? ' [Auto-updated ' + canonical + ' baseline to ' + serviceMileage + ' mi]' : ''), fileUrl]);
+
+    return jsonOut_({ ok: true, unit: unit, baselineUpdated: baselineUpdated, canonicalItem: canonical || null });
   } catch (err) {
     return jsonOut_({ ok: false, error: String(err) });
   }
