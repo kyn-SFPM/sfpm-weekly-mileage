@@ -115,7 +115,7 @@
 </div>
 
 <script>
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxWrnauTI1Kva0YfT-jWyNH5vp5GwMK0wHlr5crl2IERtGbhMOT4Czl0vYAHBwhin9f-Q/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzLmlH_8rtsZNLOj2rnAWqRqfFmY9HbUgwquHuLNpoaJ7kh8hAQPnRpxk_0NshrbWEQ/exec";
 
 const STATUS_LABEL = { overdue: 'Overdue', due_soon: 'Due Soon', ok: 'OK', no_data: 'No Mileage Yet', no_baseline: 'No Baseline' };
 
@@ -179,15 +179,15 @@ function renderByService(fleet){
   const active = fleet.filter(f => f.active);
   const groups = {};
 
-  function addTo(name, f, status, detail){
+  function addTo(name, f, status, detailFn){
     if(status !== 'overdue' && status !== 'due_soon') return;
     if(!groups[name]) groups[name] = [];
-    groups[name].push({ unit: f.unit, assigned: f.assigned, status: status, detail: detail });
+    groups[name].push({ unit: f.unit, assigned: f.assigned, status: status, detail: detailFn() });
   }
 
   active.forEach(f => {
-    f.docItems.forEach(i => addTo(i.item, f, i.status, i.status === 'overdue' ? 'Overdue since ' + i.dateValue : 'Due ' + i.dateValue));
-    f.items.forEach(i => addTo(i.item, f, i.status, i.status === 'overdue' ? 'Overdue by ' + Math.abs(i.remaining).toLocaleString() + ' mi' : 'Due in ' + i.remaining.toLocaleString() + ' mi'));
+    f.docItems.forEach(i => addTo(i.item, f, i.status, () => i.status === 'overdue' ? 'Overdue since ' + i.dateValue : 'Due ' + i.dateValue));
+    f.items.forEach(i => addTo(i.item, f, i.status, () => i.status === 'overdue' ? 'Overdue by ' + Math.abs(i.remaining).toLocaleString() + ' mi' : 'Due in ' + i.remaining.toLocaleString() + ' mi'));
   });
 
   const groupNames = Object.keys(groups).sort((a, b) => groups[b].length - groups[a].length);
@@ -295,9 +295,8 @@ async function setActive(unit, active){
 function openBackfill(unit){
   const item = prompt('Which service item are you backfilling for ' + unit + '?\\n(e.g. Oil Change, Rotate Tires, Full Check Up, Flush Radiator Fluid, Flush Transmission Fluid, Fuel Injector Maintenance, Replace Air Filter, Replace Fuel Filter, Check Alignment, Replace Spark Plugs)');
   if(!item) return;
-  const mileage = prompt('What mileage was it done at?');
-  if(!mileage) return;
-  const date = prompt('What date was it done? (YYYY-MM-DD, optional — for your own records)') || '';
+  const date = prompt('What date was it done? (YYYY-MM-DD) \\nIf you know it, I can estimate the mileage from that date automatically.') || '';
+  let mileage = prompt('What mileage was it done at? (Leave blank to estimate from the date, if given)') || '';
   submitBackfill(unit, item.trim(), mileage.trim(), date.trim());
 }
 
