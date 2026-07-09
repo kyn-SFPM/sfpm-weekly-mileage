@@ -78,7 +78,7 @@ function doGet(e) {
   if (mode === 'admin') {
     return jsonOut_(buildFleetStatus_());
   }
-  const roster = getRoster_();
+  const roster = getRoster_().filter(function (r) { return r.active; });
   const intervals = getIntervals_();
   return jsonOut_({ roster: roster, intervals: intervals });
 }
