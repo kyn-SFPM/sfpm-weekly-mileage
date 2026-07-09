@@ -106,14 +106,37 @@ const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzLmlH_8rtsZNLO
 const FALLBACK_UNITS = ["Unit 1","Unit 2","Unit 3","Unit 4","Unit 5","Unit 6","Unit 8","Unit 9","Unit 10","Unit 11","Unit 12","Unit 13","Unit 14","Unit 15","Unit 16","Unit 19","Unit 20","Unit 21","Unit 22","Unit 23","Unit 24","Unit 25","Unit 26","Unit 27","Unit 28","Unit 29","Unit 30","Unit 31"];
 
 const unitSelect = document.getElementById('unit');
+const employeeInput = document.getElementById('employee');
 const weekEndingInput = document.getElementById('weekEnding');
 const today = new Date();
 weekEndingInput.value = today.toISOString().slice(0,10);
 
+let rosterData = FALLBACK_UNITS.map(u => ({ unit: u, assigned: '' }));
+let userPickedUnit = false; // once they manually touch the dropdown, stop auto-selecting for them
+
 function populateUnits(list){
-  unitSelect.innerHTML = '<option value="">Select your unit…</option>' + list.map(u => `<option value="${u}">${u}</option>`).join('');
+  rosterData = list;
+  unitSelect.innerHTML = '<option value="">Select your unit…</option>' + list.map(r =>
+    `<option value="${r.unit}">${r.unit}${r.assigned ? ' — ' + r.assigned : ''}</option>`
+  ).join('');
 }
-populateUnits(FALLBACK_UNITS);
+populateUnits(rosterData);
+
+unitSelect.addEventListener('change', function(){ userPickedUnit = true; });
+
+function normalizeName(s){
+  return (s || '').toLowerCase().trim().replace(/[^a-z\s]/g,'');
+}
+
+employeeInput.addEventListener('input', function(){
+  if(userPickedUnit) return; // they already chose one themselves, don't override
+  const typed = normalizeName(employeeInput.value);
+  if(typed.length < 3) return;
+  const match = rosterData.find(r => r.assigned && normalizeName(r.assigned).includes(typed));
+  if(match){
+    unitSelect.value = match.unit;
+  }
+});
 
 async function loadRoster(){
   if(APPS_SCRIPT_URL.indexOf('PASTE_') === 0) return; // not deployed yet
@@ -121,7 +144,7 @@ async function loadRoster(){
     const res = await fetch(APPS_SCRIPT_URL);
     const data = await res.json();
     if(data.roster && data.roster.length){
-      populateUnits(data.roster.map(r => r.unit));
+      populateUnits(data.roster.map(r => ({ unit: r.unit, assigned: r.assigned })));
     }
   }catch(e){
     // keep fallback list
