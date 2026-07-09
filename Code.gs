@@ -19,7 +19,7 @@ const INTERVALS_SHEET_ID = '1sKpBWxmQcUujuZJrvS9T10NEb-0XrhQTaVaWone75Kw';
 const BASELINE_SHEET_ID = '1_MVvcxxn2WIPRMwFcFl6_BguYUM9b25ioX_E8K8zW2U';
 const LOG_SHEET_ID = '1MGgd9U_ciUi5HpuVti7uOqOCGioNefsvH1eNuEdl6YI';
 const RECEIPTS_FOLDER_ID = '1D3ABMoGUb3f6IknmDJapfZ5XvDxxKw-l';
-const RECEIPTS_LOG_SHEET_ID = '1Vf3hi4ao7EkcfZ201-Dvw4cHqBB4QcW3Yq2zevBNG0I';
+const RECEIPTS_LOG_SHEET_ID = '1b_0Ujn9l0FJ4-QQRvWAWuyi8Bm1HvlnOwUyAdzbLBFM';
 
 // Earliest/latest known odometer readings per unit, pulled from the historical
 // odometer export. Used to estimate mileage on a given date when backfilling
@@ -220,7 +220,7 @@ function handleBackfillService_(e) {
 
     // Also log it to the receipts log as a record, so there's a dated history entry.
     const sheet = SpreadsheetApp.openById(RECEIPTS_LOG_SHEET_ID).getSheets()[0];
-    sheet.appendRow([dateStr ? new Date(dateStr) : new Date(), 'Backfilled (admin)', unit, itemName, '', '', 'Historical baseline entered manually' + (dateStr ? ' -- service date: ' + dateStr : '') + (estimated ? ' -- mileage estimated from date' : ''), '']);
+    sheet.appendRow([dateStr ? new Date(dateStr) : new Date(), 'Backfilled (admin)', unit, itemName, mileage, '', '', 'Historical baseline entered manually' + (dateStr ? ' -- service date: ' + dateStr : '') + (estimated ? ' -- mileage estimated from date' : ''), '']);
 
     return jsonOut_({ ok: true, unit: unit, item: itemName, mileage: mileage, estimated: estimated });
   } catch (err) {
@@ -287,7 +287,7 @@ function handleReceipt_(e) {
     }
 
     const sheet = SpreadsheetApp.openById(RECEIPTS_LOG_SHEET_ID).getSheets()[0];
-    sheet.appendRow([new Date(), employee, unit, serviceType, vendor, cost, notes + (baselineUpdated ? ' [Auto-updated ' + canonical + ' baseline to ' + serviceMileage + ' mi]' : ''), fileUrl]);
+    sheet.appendRow([new Date(), employee, unit, serviceType, serviceMileage || '', vendor, cost, notes + (baselineUpdated ? ' [Auto-updated ' + canonical + ' baseline to ' + serviceMileage + ' mi]' : ''), fileUrl]);
 
     return jsonOut_({ ok: true, unit: unit, baselineUpdated: baselineUpdated, canonicalItem: canonical || null });
   } catch (err) {
