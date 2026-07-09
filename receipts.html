@@ -121,7 +121,7 @@ populateUnits(FALLBACK_UNITS);
 
 async function loadRoster(){
   try{
-    const res = await fetch(APPS_SCRIPT_URL);
+    const res = await fetch(APPS_SCRIPT_URL + '?_t=' + Date.now(), {cache: 'no-store'});
     const data = await res.json();
     if(data.roster && data.roster.length){
       populateUnits(data.roster.map(r => r.unit));
