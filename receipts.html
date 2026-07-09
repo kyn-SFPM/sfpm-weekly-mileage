@@ -1,6 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+(function(){
+  var params = new URLSearchParams(window.location.search);
+  if(!params.has('_v')){
+    params.set('_v', Date.now());
+    window.location.replace(window.location.pathname + '?' + params.toString());
+  }
+})();
+</script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>SFPM — Log a Receipt</title>
