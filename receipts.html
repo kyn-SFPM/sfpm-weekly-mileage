@@ -74,6 +74,9 @@
     <label>Service / Work Performed</label>
     <input id="serviceType" required placeholder="Oil change, brakes, etc.">
 
+    <label>Mileage at Time of Service</label>
+    <input id="serviceMileage" type="number" placeholder="e.g. 84210 (updates the fleet tracker automatically)">
+
     <div style="display:flex;gap:12px;">
       <div style="flex:1;"><label>Vendor</label><input id="vendor" placeholder="Shop name"></div>
       <div style="flex:1;"><label>Cost</label><input id="cost" placeholder="$"></div>
@@ -175,6 +178,7 @@ document.getElementById('receiptForm').addEventListener('submit', async function
   fd.append('employee', document.getElementById('employee').value.trim());
   fd.append('unit', document.getElementById('unit').value);
   fd.append('serviceType', document.getElementById('serviceType').value.trim());
+  fd.append('serviceMileage', document.getElementById('serviceMileage').value.trim());
   fd.append('vendor', document.getElementById('vendor').value.trim());
   fd.append('cost', document.getElementById('cost').value.trim());
   fd.append('notes', document.getElementById('notes').value.trim());
@@ -189,6 +193,9 @@ document.getElementById('receiptForm').addEventListener('submit', async function
     document.getElementById('receiptForm').style.display = 'none';
     document.getElementById('resultBox').style.display = 'block';
     document.getElementById('thanksMsg').textContent = 'Thanks — receipt logged for ' + data.unit;
+    document.querySelector('#resultBox .msg').textContent = data.baselineUpdated
+      ? 'Logged, and the fleet tracker was updated automatically — ' + data.canonicalItem + ' is now current for this unit.'
+      : 'Logged to the SFPM Receipts sheet.';
     document.getElementById('againBtn').style.display = 'block';
   }catch(err){
     errBox.textContent = "Couldn't submit that — check your connection and try again.";
