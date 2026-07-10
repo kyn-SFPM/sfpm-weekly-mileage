@@ -96,6 +96,28 @@
     <label>Notes (optional)</label>
     <textarea id="notes" rows="2" placeholder="Anything worth flagging — noise, warning light, etc."></textarea>
 
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--steel);">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;" for="alsoService">
+        <input type="checkbox" id="alsoService" style="width:auto;accent-color:var(--amber);">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);">Also had service done? Log it here too</span>
+      </label>
+
+      <div id="serviceSection" style="display:none;margin-top:14px;">
+        <label>Photo of Receipt (optional)</label>
+        <input id="s_photo" type="file" accept="image/*">
+        <img id="s_preview" style="margin-top:10px;max-width:100%;border-radius:4px;border:1px solid var(--steel);display:none;">
+
+        <label>Service / Work Performed</label>
+        <input id="s_serviceType" placeholder="Oil change, brakes, etc.">
+
+        <div style="display:flex;gap:12px;">
+          <div style="flex:1;"><label>Vendor</label><input id="s_vendor" placeholder="Shop name"></div>
+          <div style="flex:1;"><label>Cost</label><input id="s_cost" placeholder="$"></div>
+        </div>
+        <div style="color:var(--text-dim);font-size:11px;margin-top:6px;">Uses the mileage you entered above — no need to re-enter it.</div>
+      </div>
+    </div>
+
     <button class="btn" type="submit" id="submitBtn">Submit Mileage</button>
     <div class="err" id="errBox"></div>
   </form>
@@ -148,6 +170,46 @@ employeeInput.addEventListener('input', function(){
   }
 });
 
+document.getElementById('alsoService').addEventListener('change', function(){
+  document.getElementById('serviceSection').style.display = this.checked ? 'block' : 'none';
+});
+
+let servicePhotoBase64 = '';
+
+function compressServicePhoto(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const maxDim = 1400;
+        let w = img.width, h = img.height;
+        if(w > maxDim || h > maxDim){
+          if(w > h){ h = Math.round(h * maxDim / w); w = maxDim; }
+          else { w = Math.round(w * maxDim / h); h = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        document.getElementById('s_preview').src = dataUrl;
+        document.getElementById('s_preview').style.display = 'block';
+        resolve(dataUrl.split(',')[1]);
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById('s_photo').addEventListener('change', async function(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  servicePhotoBase64 = await compressServicePhoto(file);
+});
+
 async function loadRoster(){
   if(APPS_SCRIPT_URL.indexOf('PASTE_') === 0) return; // not deployed yet
   try{
@@ -183,6 +245,16 @@ document.getElementById('mileageForm').addEventListener('submit', async function
   fd.append('mileage', document.getElementById('mileage').value);
   fd.append('weekEnding', document.getElementById('weekEnding').value);
   fd.append('notes', document.getElementById('notes').value.trim());
+
+  if(document.getElementById('alsoService').checked){
+    fd.append('serviceType', document.getElementById('s_serviceType').value.trim());
+    fd.append('vendor', document.getElementById('s_vendor').value.trim());
+    fd.append('cost', document.getElementById('s_cost').value.trim());
+    if(servicePhotoBase64){
+      fd.append('photo', servicePhotoBase64);
+      fd.append('photoMime', 'image/jpeg');
+    }
+  }
 
   try{
     const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: fd });
@@ -225,11 +297,21 @@ function showResult(data){
     ? ('Started tracking from this reading: ' + justSet.join(', ') + '.')
     : '';
 
+  if(data.receipt && data.receipt.ok){
+    const receiptMsg = data.receipt.baselineUpdated
+      ? 'Service logged and ' + data.receipt.canonicalItem + ' baseline updated.'
+      : 'Service logged.';
+    document.getElementById('extraMsg').textContent += (document.getElementById('extraMsg').textContent ? ' ' : '') + receiptMsg;
+  }
+
   document.getElementById('againBtn').style.display = 'block';
 }
 
 document.getElementById('againBtn').addEventListener('click', function(){
   document.getElementById('mileageForm').reset();
+  document.getElementById('serviceSection').style.display = 'none';
+  document.getElementById('s_preview').style.display = 'none';
+  servicePhotoBase64 = '';
   weekEndingInput.value = today.toISOString().slice(0,10);
   document.getElementById('mileageForm').style.display = 'block';
   document.getElementById('resultBox').style.display = 'none';
