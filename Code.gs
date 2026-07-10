@@ -251,12 +251,16 @@ const STANDARD_ITEM_MAP = {
 };
 
 function handleReceipt_(e) {
+  return jsonOut_(handleReceiptCore_(e));
+}
+
+function handleReceiptCore_(e, overrideMileage) {
   try {
     const params = e.parameter;
     const employee = (params.employee || '').trim();
     const unit = (params.unit || '').trim();
     const serviceType = (params.serviceType || '').trim();
-    const serviceMileage = Number(params.serviceMileage);
+    const serviceMileage = overrideMileage || Number(params.serviceMileage);
     const vendor = (params.vendor || '').trim();
     const cost = (params.cost || '').trim();
     const notes = (params.notes || '').trim();
@@ -264,7 +268,7 @@ function handleReceipt_(e) {
     const photoMime = params.photoMime || 'image/jpeg';
 
     if (!employee || !unit) {
-      return jsonOut_({ ok: false, error: 'Missing employee or unit.' });
+      return { ok: false, error: 'Missing employee or unit.' };
     }
 
     let fileUrl = '';
@@ -289,9 +293,9 @@ function handleReceipt_(e) {
     const sheet = SpreadsheetApp.openById(RECEIPTS_LOG_SHEET_ID).getSheets()[0];
     sheet.appendRow([new Date(), employee, unit, serviceType, serviceMileage || '', vendor, cost, notes + (baselineUpdated ? ' [Auto-updated ' + canonical + ' baseline to ' + serviceMileage + ' mi]' : ''), fileUrl]);
 
-    return jsonOut_({ ok: true, unit: unit, baselineUpdated: baselineUpdated, canonicalItem: canonical || null });
+    return { ok: true, unit: unit, baselineUpdated: baselineUpdated, canonicalItem: canonical || null };
   } catch (err) {
-    return jsonOut_({ ok: false, error: String(err) });
+    return { ok: false, error: String(err) };
   }
 }
 
@@ -311,6 +315,13 @@ function handleMileage_(e) {
     // Log the submission
     const logSheet = SpreadsheetApp.openById(LOG_SHEET_ID).getSheets()[0];
     logSheet.appendRow([new Date(), employee, unit, mileage, weekEnding, notes]);
+
+    // Optional: a receipt/service was attached to this same submission.
+    let receiptResult = null;
+    const serviceType = (params.serviceType || '').trim();
+    if (serviceType) {
+      receiptResult = handleReceiptCore_(e, mileage); // reuse the receipt logic, passing this mileage through
+    }
 
     // Compute service status against baseline + intervals
     const intervals = getIntervals_();
@@ -338,7 +349,7 @@ function handleMileage_(e) {
       }
     });
 
-    return jsonOut_({ ok: true, unit: unit, mileage: mileage, results: results, baselinesJustSet: newlySet });
+    return jsonOut_({ ok: true, unit: unit, mileage: mileage, results: results, baselinesJustSet: newlySet, receipt: receiptResult });
   } catch (err) {
     return jsonOut_({ ok: false, error: String(err) });
   }
