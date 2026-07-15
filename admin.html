@@ -169,6 +169,10 @@
     <label>Which services were done?</label>
     <div id="bf_items" style="margin-bottom:6px;"></div>
 
+    <label>Other — not on the tracked schedule (optional)</label>
+    <input type="text" id="bf_other" placeholder="e.g. New tires, brake pads, alternator...">
+    <div style="color:var(--text-dim);font-size:11px;margin-top:6px;">Gets logged to the record, but won't affect overdue tracking since it's not one of the 10 tracked items.</div>
+
     <label>Date Performed</label>
     <input type="date" id="bf_date">
 
@@ -461,6 +465,7 @@ function openBackfill(unit){
   document.getElementById('backfillTitle').textContent = 'Backfill Service — ' + unit;
   document.getElementById('bf_date').value = '';
   document.getElementById('bf_mileage').value = '';
+  document.getElementById('bf_other').value = '';
   document.getElementById('bf_items').innerHTML = ALL_SERVICE_ITEMS.map((item, i) => `
     <label style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--steel);cursor:pointer;">
       <input type="checkbox" class="bf-item-check" value="${item}" style="width:auto;accent-color:var(--amber);">
@@ -476,11 +481,14 @@ function closeBackfill(){
 
 async function submitBackfillMulti(){
   const checked = Array.from(document.querySelectorAll('.bf-item-check:checked')).map(c => c.value);
+  const other = document.getElementById('bf_other').value.trim();
+  if(other) checked.push(other);
+
   const date = document.getElementById('bf_date').value.trim();
   const mileage = document.getElementById('bf_mileage').value.trim();
 
   if(checked.length === 0){
-    alert('Select at least one service item.');
+    alert('Select at least one service item, or type one into the Other field.');
     return;
   }
   if(!mileage && !date){
