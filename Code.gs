@@ -179,7 +179,42 @@ function doPost(e) {
   if (formType === 'receipt') return handleReceipt_(e);
   if (formType === 'setActive') return handleSetActive_(e);
   if (formType === 'backfillService') return handleBackfillService_(e);
+  if (formType === 'updateVehicleInfo') return handleUpdateVehicleInfo_(e);
   return handleMileage_(e);
+}
+
+function handleUpdateVehicleInfo_(e) {
+  try {
+    const unit = (e.parameter.unit || '').trim();
+    if (!unit) return jsonOut_({ ok: false, error: 'Missing unit.' });
+
+    const sheet = SpreadsheetApp.openById(ROSTER_SHEET_ID).getSheets()[0];
+    const data = sheet.getDataRange().getValues();
+    const rowIndex = data.findIndex(function (r) { return r[0] === unit; });
+    if (rowIndex === -1) return jsonOut_({ ok: false, error: 'Unit not found.' });
+
+    // column: 1=Unit 2=Assigned 3=Entity 4=Year 5=Make 6=Model 7=VIN 8=Plate 9=TagsExpire 10=InsuranceExpires 11=InspectionDate 12=Active
+    const fieldColumns = {
+      vin: 7,
+      plate: 8,
+      tagsExpire: 9,
+      insuranceExpires: 10,
+      inspectionDate: 11
+    };
+
+    const updated = [];
+    Object.keys(fieldColumns).forEach(function (field) {
+      const val = e.parameter[field];
+      if (val !== undefined && val !== null && val.trim() !== '') {
+        sheet.getRange(rowIndex + 1, fieldColumns[field]).setValue(val.trim());
+        updated.push(field);
+      }
+    });
+
+    return jsonOut_({ ok: true, unit: unit, updated: updated });
+  } catch (err) {
+    return jsonOut_({ ok: false, error: String(err) });
+  }
 }
 
 function handleSetActive_(e) {
