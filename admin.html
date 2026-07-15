@@ -99,6 +99,31 @@
   .service-row .s{font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;}
   .service-row .s.overdue{color:var(--rust-bright);}
   .service-row .s.due_soon{color:var(--amber-bright);}
+  .overlay{
+    display:none;position:fixed;inset:0;background:rgba(8,7,6,.72);z-index:50;
+    align-items:flex-end;justify-content:center;
+  }
+  .overlay.open{display:flex;}
+  .sheet{
+    background:var(--panel);width:100%;max-width:520px;max-height:88vh;overflow-y:auto;
+    border-radius:14px 14px 0 0;border-top:1px solid var(--steel);padding:20px 18px 30px;
+    animation:slideup .2s ease-out;
+  }
+  @keyframes slideup{from{transform:translateY(24px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+  .sheet-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+  .sheet-title{font-family:'Oswald',sans-serif;font-size:18px;font-weight:600;text-transform:uppercase;}
+  .close-x{background:none;border:1px solid var(--steel);color:var(--text-muted);width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer;}
+  .sheet label{display:block;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);margin:14px 0 5px;}
+  .sheet input{
+    width:100%;background:var(--panel-alt);border:1px solid var(--steel);border-radius:4px;color:var(--text);
+    padding:10px 11px;font-family:'Inter',sans-serif;font-size:14.5px;
+  }
+  .sheet input:focus{outline:none;border-color:var(--amber);}
+  .sheet .btn{
+    font-family:'Oswald',sans-serif;font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:.04em;
+    padding:12px;border-radius:4px;border:none;cursor:pointer;width:100%;margin-top:18px;background:var(--amber);color:#1a1408;
+  }
+  .sheet .btn:disabled{opacity:.5;}
 </style>
 </head>
 <body>
@@ -132,6 +157,27 @@
     </div>
   </div>
   <div id="content"><div class="loading">Loading fleet status…</div></div>
+</div>
+
+<div class="overlay" id="backfillOverlay">
+  <div class="sheet">
+    <div class="sheet-hdr">
+      <div class="sheet-title" id="backfillTitle">Backfill Service</div>
+      <button class="close-x" onclick="closeBackfill()">&times;</button>
+    </div>
+
+    <label>Which services were done?</label>
+    <div id="bf_items" style="margin-bottom:6px;"></div>
+
+    <label>Date Performed</label>
+    <input type="date" id="bf_date">
+
+    <label>Mileage at Time of Service</label>
+    <input type="number" id="bf_mileage" placeholder="Leave blank to estimate from date">
+    <div style="color:var(--text-dim);font-size:11px;margin-top:6px;">All selected items will be set to the same date and mileage.</div>
+
+    <button class="btn" id="bfSubmitBtn" onclick="submitBackfillMulti()">Save Selected</button>
+  </div>
 </div>
 
 <script>
@@ -407,29 +453,67 @@ async function setActive(unit, active){
   load();
 }
 
+const ALL_SERVICE_ITEMS = ['Oil Change','Rotate Tires','Full Check Up','Flush Radiator Fluid','Flush Transmission Fluid','Fuel Injector Maintenance','Replace Air Filter','Replace Fuel Filter','Check Alignment','Replace Spark Plugs'];
+let backfillUnit = null;
+
 function openBackfill(unit){
-  const item = prompt('Which service item are you backfilling for ' + unit + '?\\n(e.g. Oil Change, Rotate Tires, Full Check Up, Flush Radiator Fluid, Flush Transmission Fluid, Fuel Injector Maintenance, Replace Air Filter, Replace Fuel Filter, Check Alignment, Replace Spark Plugs)');
-  if(!item) return;
-  const date = prompt('What date was it done? (YYYY-MM-DD) \\nIf you know it, I can estimate the mileage from that date automatically.') || '';
-  let mileage = prompt('What mileage was it done at? (Leave blank to estimate from the date, if given)') || '';
-  submitBackfill(unit, item.trim(), mileage.trim(), date.trim());
+  backfillUnit = unit;
+  document.getElementById('backfillTitle').textContent = 'Backfill Service — ' + unit;
+  document.getElementById('bf_date').value = '';
+  document.getElementById('bf_mileage').value = '';
+  document.getElementById('bf_items').innerHTML = ALL_SERVICE_ITEMS.map((item, i) => `
+    <label style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--steel);cursor:pointer;">
+      <input type="checkbox" class="bf-item-check" value="${item}" style="width:auto;accent-color:var(--amber);">
+      <span style="font-size:14px;">${item}</span>
+    </label>
+  `).join('');
+  document.getElementById('backfillOverlay').classList.add('open');
 }
 
-async function submitBackfill(unit, item, mileage, date){
-  const fd = new FormData();
-  fd.append('formType', 'backfillService');
-  fd.append('unit', unit);
-  fd.append('serviceItem', item);
-  fd.append('mileage', mileage);
-  fd.append('date', date);
-  const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: fd });
-  const data = await res.json();
-  if(data.ok){
-    alert('Saved: ' + unit + ' — ' + item + ' set to ' + Number(mileage).toLocaleString() + ' mi.');
-    load();
-  } else {
-    alert('Could not save: ' + (data.error || 'unknown error'));
+function closeBackfill(){
+  document.getElementById('backfillOverlay').classList.remove('open');
+}
+
+async function submitBackfillMulti(){
+  const checked = Array.from(document.querySelectorAll('.bf-item-check:checked')).map(c => c.value);
+  const date = document.getElementById('bf_date').value.trim();
+  const mileage = document.getElementById('bf_mileage').value.trim();
+
+  if(checked.length === 0){
+    alert('Select at least one service item.');
+    return;
   }
+  if(!mileage && !date){
+    alert('Enter a date (to estimate mileage) or a mileage directly.');
+    return;
+  }
+
+  const btn = document.getElementById('bfSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  const results = [];
+  for(const item of checked){
+    const fd = new FormData();
+    fd.append('formType', 'backfillService');
+    fd.append('unit', backfillUnit);
+    fd.append('serviceItem', item);
+    fd.append('mileage', mileage);
+    fd.append('date', date);
+    try{
+      const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: fd });
+      const data = await res.json();
+      results.push(item + ': ' + (data.ok ? 'saved' : 'FAILED — ' + data.error));
+    }catch(err){
+      results.push(item + ': FAILED — ' + err.message);
+    }
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Save Selected';
+  closeBackfill();
+  load();
+  alert('Backfilled for ' + backfillUnit + ':\\n\\n' + results.join('\\n'));
 }
 
 function toggle(idx){
