@@ -184,6 +184,34 @@
   </div>
 </div>
 
+<div class="overlay" id="editInfoOverlay">
+  <div class="sheet">
+    <div class="sheet-hdr">
+      <div class="sheet-title" id="editInfoTitle">Edit Vehicle Info</div>
+      <button class="close-x" onclick="closeEditInfo()">&times;</button>
+    </div>
+
+    <label>VIN</label>
+    <input type="text" id="ei_vin" placeholder="17-digit VIN">
+
+    <label>License Plate</label>
+    <input type="text" id="ei_plate" placeholder="Plate number">
+
+    <label>Tags/Registration Expires</label>
+    <input type="date" id="ei_tags">
+
+    <label>Insurance Expires</label>
+    <input type="date" id="ei_insurance">
+
+    <label>Inspection Date</label>
+    <input type="date" id="ei_inspection">
+
+    <div style="color:var(--text-dim);font-size:11px;margin-top:6px;">Only fields you fill in get updated — leave anything blank to keep it as-is.</div>
+
+    <button class="btn" id="eiSubmitBtn" onclick="submitEditInfo()">Save Changes</button>
+  </div>
+</div>
+
 <script>
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxWrnauTI1Kva0YfT-jWyNH5vp5GwMK0wHlr5crl2IERtGbhMOT4Czl0vYAHBwhin9f-Q/exec";
 
@@ -350,7 +378,7 @@ function renderByService(fleet){
     const safeName = name.replace(/[^a-zA-Z0-9]/g, '_');
     return `
       <div class="service-group">
-        <div class="service-group-hdr ${isOpen ? 'open' : ''}" onclick="toggleServiceGroup('${safeName}')">
+        <div class="service-group-hdr ${isOpen ? 'open' : ''}" onclick="toggleServiceGroup('${name.replace(/'/g, "\\'")}')">
           <span>${esc(name)}</span>
           <span style="display:flex;align-items:center;gap:8px;">
             <span class="service-group-count" style="color:${overdueN ? 'var(--rust-bright)' : 'var(--amber-bright)'}">${rows.length} vehicle${rows.length === 1 ? '' : 's'}</span>
@@ -370,8 +398,8 @@ function renderByService(fleet){
   }).join('');
 }
 
-function toggleServiceGroup(safeName){
-  openGroups[safeName] = !openGroups[safeName];
+function toggleServiceGroup(name){
+  openGroups[name] = !openGroups[name];
   renderContent();
 }
 
@@ -422,6 +450,7 @@ function renderByVehicle(fleet){
           <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--steel);display:flex;gap:8px;flex-wrap:wrap;">
             <button class="admin-btn" onclick="event.stopPropagation(); setActive('${esc(f.unit)}', ${!f.active})">${f.active ? 'Mark Inactive' : 'Mark Active'}</button>
             <button class="admin-btn" onclick="event.stopPropagation(); openBackfill('${esc(f.unit)}')">Backfill Known Service Date</button>
+            <button class="admin-btn" onclick="event.stopPropagation(); openEditInfo('${esc(f.unit)}', '${esc(f.vin||'')}', '${esc(f.plate||'')}', '${esc(f.docItems[0].dateValue||'')}', '${esc(f.docItems[1].dateValue||'')}', '${esc(f.docItems[2].dateValue||'')}')">Edit Vehicle Info</button>
           </div>
         </div>
       </div>
@@ -526,6 +555,66 @@ async function submitBackfillMulti(){
 
 function toggle(idx){
   document.getElementById('detail-' + idx).classList.toggle('open');
+}
+
+let editInfoUnit = null;
+
+function openEditInfo(unit, vin, plate, tags, insurance, inspection){
+  editInfoUnit = unit;
+  document.getElementById('editInfoTitle').textContent = 'Edit Vehicle Info — ' + unit;
+  document.getElementById('ei_vin').value = vin || '';
+  document.getElementById('ei_plate').value = plate || '';
+  document.getElementById('ei_tags').value = tags || '';
+  document.getElementById('ei_insurance').value = insurance || '';
+  document.getElementById('ei_inspection').value = inspection || '';
+  document.getElementById('editInfoOverlay').classList.add('open');
+}
+
+function closeEditInfo(){
+  document.getElementById('editInfoOverlay').classList.remove('open');
+}
+
+async function submitEditInfo(){
+  const vin = document.getElementById('ei_vin').value.trim();
+  const plate = document.getElementById('ei_plate').value.trim();
+  const tagsExpire = document.getElementById('ei_tags').value.trim();
+  const insuranceExpires = document.getElementById('ei_insurance').value.trim();
+  const inspectionDate = document.getElementById('ei_inspection').value.trim();
+
+  if(!vin && !plate && !tagsExpire && !insuranceExpires && !inspectionDate){
+    alert('Fill in at least one field to update.');
+    return;
+  }
+
+  const btn = document.getElementById('eiSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  const fd = new FormData();
+  fd.append('formType', 'updateVehicleInfo');
+  fd.append('unit', editInfoUnit);
+  if(vin) fd.append('vin', vin);
+  if(plate) fd.append('plate', plate);
+  if(tagsExpire) fd.append('tagsExpire', tagsExpire);
+  if(insuranceExpires) fd.append('insuranceExpires', insuranceExpires);
+  if(inspectionDate) fd.append('inspectionDate', inspectionDate);
+
+  try{
+    const res = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: fd });
+    const data = await res.json();
+    btn.disabled = false;
+    btn.textContent = 'Save Changes';
+    if(data.ok){
+      closeEditInfo();
+      load();
+    } else {
+      alert('Could not save: ' + (data.error || 'unknown error'));
+    }
+  }catch(err){
+    btn.disabled = false;
+    btn.textContent = 'Save Changes';
+    alert('Could not save: ' + err.message);
+  }
 }
 
 function esc(s){
